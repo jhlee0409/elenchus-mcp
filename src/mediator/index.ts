@@ -116,6 +116,10 @@ export function analyzeRoundAndIntervene(
 
   const interventions: ActiveIntervention[] = [];
 
+  // [ENH: ONE-SHOT] Check verification mode for reduced intervention
+  const verificationMode = session.verificationMode?.mode || 'standard';
+  const isSimplifiedMode = verificationMode === 'fast-track' || verificationMode === 'single-pass';
+
   // [FIX: PRF-01] Calculate importance once and cache for use in checks
   const cachedImportance = calculateFileImportance(state.graph);
 
@@ -123,41 +127,53 @@ export function analyzeRoundAndIntervene(
   const mentionedFiles = extractMentionedFiles(roundOutput);
   updateCoverage(state, mentionedFiles, session.currentRound);
 
-  // 2. Check missed dependencies
+  // [ENH: ONE-SHOT] In simplified modes, only run critical interventions
+  // Critical: Circular dependencies, Critical path ignored
+  // Non-critical (skip in simplified mode): Coverage gaps, Side effects, Scope drift, etc.
+
+  // 2. Check missed dependencies (critical - always run)
   const missedDeps = checkMissedDependencies(state, mentionedFiles, newIssues, cachedImportance);
   if (missedDeps) interventions.push(missedDeps);
 
-  // 3. Check coverage gaps
-  const coverageIssue = checkIncompleteCoverage(state, session.currentRound, cachedImportance);
-  if (coverageIssue) interventions.push(coverageIssue);
+  // 3. Check coverage gaps (non-critical - skip in simplified mode)
+  if (!isSimplifiedMode) {
+    const coverageIssue = checkIncompleteCoverage(state, session.currentRound, cachedImportance);
+    if (coverageIssue) interventions.push(coverageIssue);
+  }
 
-  // 4. Side effect warnings
-  const sideEffects = checkSideEffects(state, newIssues);
-  if (sideEffects) interventions.push(sideEffects);
+  // 4. Side effect warnings (non-critical - skip in simplified mode)
+  if (!isSimplifiedMode) {
+    const sideEffects = checkSideEffects(state, newIssues);
+    if (sideEffects) interventions.push(sideEffects);
+  }
 
-  // 5. Scope drift check
-  const scopeDrift = checkScopeDrift(state, mentionedFiles, session);
-  if (scopeDrift) interventions.push(scopeDrift);
+  // 5. Scope drift check (non-critical - skip in simplified mode)
+  if (!isSimplifiedMode) {
+    const scopeDrift = checkScopeDrift(state, mentionedFiles, session);
+    if (scopeDrift) interventions.push(scopeDrift);
+  }
 
-  // 6. Circular dependency check (first round only)
+  // 6. Circular dependency check (critical - always run, first round only)
   if (session.currentRound === 1) {
     const circular = checkCircularDependencies(state);
     if (circular) interventions.push(circular);
   }
 
-  // 7. Critical path ignored check
+  // 7. Critical path ignored check (critical - always run)
   const ignoredCritical = checkCriticalPathIgnored(state, mentionedFiles, cachedImportance);
   if (ignoredCritical) interventions.push(ignoredCritical);
 
-  // 8. Verifier misunderstanding check (when Critic role)
-  if (role === 'critic') {
+  // 8. Verifier misunderstanding check (skip in single-pass mode, no Critic)
+  if (role === 'critic' && verificationMode !== 'single-pass') {
     const contextCorrection = checkVerifierMisunderstanding(state, roundOutput, session);
     if (contextCorrection) interventions.push(contextCorrection);
   }
 
-  // 9. [ENH: MED-02] Quick agreement / collusion detection
-  const collusion = checkQuickAgreementCollusion(session, role, roundOutput);
-  if (collusion) interventions.push(collusion);
+  // 9. [ENH: MED-02] Quick agreement / collusion detection (skip in single-pass mode)
+  if (verificationMode !== 'single-pass') {
+    const collusion = checkQuickAgreementCollusion(session, role, roundOutput);
+    if (collusion) interventions.push(collusion);
+  }
 
   // Record interventions in state
   state.interventions.push(...interventions);

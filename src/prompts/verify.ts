@@ -23,7 +23,14 @@ Start a session with the MCP tool:
 elenchus_start_session({
   target: "${target}",
   requirements: "${requirements}",
-  workingDir: "[current working directory]"
+  workingDir: "[current working directory]",
+  // [ONE-SHOT MODE] Choose verification mode:
+  verificationMode: {
+    mode: "fast-track"  // Options: "standard", "fast-track", "single-pass"
+    // "standard": Full Verifier↔Critic loop (3+ rounds)
+    // "fast-track": Early convergence if no issues (1+ round)
+    // "single-pass": Verifier only, no Critic review (fastest)
+  }
 })
 \`\`\`
 

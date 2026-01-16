@@ -442,3 +442,158 @@ export async function validateIssuesEvidence(
 
   return results;
 }
+
+// =============================================================================
+// [ENH: ONE-SHOT] Pre-verification Static Analysis
+// Lightweight static analysis to catch obvious issues before LLM verification
+// =============================================================================
+
+export interface PreAnalysisResult {
+  file: string;
+  findings: PreAnalysisFinding[];
+}
+
+export interface PreAnalysisFinding {
+  type: 'security' | 'correctness' | 'reliability' | 'performance';
+  pattern: string;
+  line: number;
+  snippet: string;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  description: string;
+}
+
+// Common patterns that indicate potential issues
+const ANALYSIS_PATTERNS: Array<{
+  type: PreAnalysisFinding['type'];
+  pattern: RegExp;
+  description: string;
+  confidence: PreAnalysisFinding['confidence'];
+}> = [
+  // Security patterns
+  { type: 'security', pattern: /eval\s*\(/g, description: 'Potential code injection via eval()', confidence: 'HIGH' },
+  { type: 'security', pattern: /innerHTML\s*=/g, description: 'Potential XSS via innerHTML assignment', confidence: 'HIGH' },
+  { type: 'security', pattern: /\$\{.*\}\s*(?:WHERE|SELECT|INSERT|UPDATE|DELETE)/gi, description: 'Potential SQL injection (template literal in SQL)', confidence: 'HIGH' },
+  { type: 'security', pattern: /password.*=\s*['"][^'"]+['"]/gi, description: 'Hardcoded password detected', confidence: 'HIGH' },
+  { type: 'security', pattern: /api[_-]?key.*=\s*['"][^'"]+['"]/gi, description: 'Hardcoded API key detected', confidence: 'HIGH' },
+  { type: 'security', pattern: /exec\s*\(/g, description: 'Potential command injection via exec()', confidence: 'MEDIUM' },
+  { type: 'security', pattern: /dangerouslySetInnerHTML/g, description: 'React dangerouslySetInnerHTML usage', confidence: 'MEDIUM' },
+
+  // Correctness patterns
+  { type: 'correctness', pattern: /===?\s*undefined\s*\|\|\s*===?\s*null/g, description: 'Incorrect null/undefined check (use ?? or !=)', confidence: 'MEDIUM' },
+  { type: 'correctness', pattern: /catch\s*\(\s*\w*\s*\)\s*\{\s*\}/g, description: 'Empty catch block (error suppression)', confidence: 'HIGH' },
+  { type: 'correctness', pattern: /console\.(log|warn|error)\s*\(/g, description: 'Console statement in production code', confidence: 'LOW' },
+  { type: 'correctness', pattern: /TODO|FIXME|HACK|XXX/gi, description: 'TODO/FIXME comment indicates incomplete code', confidence: 'LOW' },
+  { type: 'correctness', pattern: /\.then\([^)]*\)\s*$/gm, description: 'Promise without error handling', confidence: 'MEDIUM' },
+
+  // Reliability patterns
+  { type: 'reliability', pattern: /setTimeout\s*\([^,]+,\s*0\s*\)/g, description: 'setTimeout with 0 delay (race condition risk)', confidence: 'MEDIUM' },
+  { type: 'reliability', pattern: /new\s+Promise\s*\(\s*\(/g, description: 'Promise constructor (consider async/await)', confidence: 'LOW' },
+  { type: 'reliability', pattern: /process\.exit\s*\(/g, description: 'process.exit() can cause abrupt termination', confidence: 'MEDIUM' },
+
+  // Performance patterns
+  { type: 'performance', pattern: /for\s*\([^)]+\)\s*\{[^}]*\.push\(/gs, description: 'Array.push in loop (consider pre-allocation)', confidence: 'LOW' },
+  { type: 'performance', pattern: /JSON\.parse\s*\(\s*JSON\.stringify/g, description: 'JSON clone (consider structuredClone)', confidence: 'LOW' },
+  { type: 'performance', pattern: /new\s+RegExp\s*\(/g, description: 'Dynamic RegExp creation (consider literal)', confidence: 'LOW' }
+];
+
+/**
+ * [ENH: ONE-SHOT] Perform lightweight static analysis on files
+ * This runs automatically during context initialization to pre-identify obvious issues
+ */
+export function analyzeFileForIssues(content: string, filePath: string): PreAnalysisResult {
+  const findings: PreAnalysisFinding[] = [];
+  const lines = content.split('\n');
+
+  for (const patternDef of ANALYSIS_PATTERNS) {
+    const regex = new RegExp(patternDef.pattern.source, patternDef.pattern.flags);
+    let match;
+
+    while ((match = regex.exec(content)) !== null) {
+      // Find line number
+      const beforeMatch = content.substring(0, match.index);
+      const lineNumber = beforeMatch.split('\n').length;
+
+      // Get snippet
+      const snippet = lines[lineNumber - 1]?.trim() || '';
+
+      // Skip if in comment
+      if (isInComment(content, match.index)) continue;
+
+      findings.push({
+        type: patternDef.type,
+        pattern: patternDef.pattern.source,
+        line: lineNumber,
+        snippet: snippet.length > 100 ? snippet.substring(0, 100) + '...' : snippet,
+        confidence: patternDef.confidence,
+        description: patternDef.description
+      });
+    }
+  }
+
+  return { file: filePath, findings };
+}
+
+/**
+ * Check if position is inside a comment
+ */
+function isInComment(content: string, position: number): boolean {
+  // Check for single-line comment
+  const lineStart = content.lastIndexOf('\n', position) + 1;
+  const lineBeforePos = content.substring(lineStart, position);
+  if (lineBeforePos.includes('//')) return true;
+
+  // Check for multi-line comment
+  const beforePos = content.substring(0, position);
+  const lastCommentStart = beforePos.lastIndexOf('/*');
+  const lastCommentEnd = beforePos.lastIndexOf('*/');
+  if (lastCommentStart > lastCommentEnd) return true;
+
+  return false;
+}
+
+/**
+ * [ENH: ONE-SHOT] Analyze all files in context
+ * Returns pre-analysis hints for LLM to focus on
+ */
+export function analyzeContextForIssues(context: VerificationContext): PreAnalysisResult[] {
+  const results: PreAnalysisResult[] = [];
+
+  for (const [filePath, fileCtx] of context.files.entries()) {
+    if (!fileCtx.content) continue;
+
+    const result = analyzeFileForIssues(fileCtx.content, filePath);
+    if (result.findings.length > 0) {
+      results.push(result);
+    }
+  }
+
+  return results;
+}
+
+/**
+ * [ENH: ONE-SHOT] Generate pre-analysis summary for LLM prompt
+ */
+export function generatePreAnalysisSummary(results: PreAnalysisResult[]): string {
+  if (results.length === 0) {
+    return '**Pre-analysis**: No obvious issues detected by static analysis.';
+  }
+
+  const totalFindings = results.reduce((sum, r) => sum + r.findings.length, 0);
+  const highConfidence = results.flatMap(r => r.findings).filter(f => f.confidence === 'HIGH');
+
+  let summary = `**Pre-analysis**: ${totalFindings} potential issue(s) detected in ${results.length} file(s).\n\n`;
+
+  if (highConfidence.length > 0) {
+    summary += '### High-Confidence Findings (Verify These First)\n';
+    for (const finding of highConfidence.slice(0, 5)) {
+      const file = results.find(r => r.findings.includes(finding))?.file || 'unknown';
+      summary += `- **${finding.type.toUpperCase()}** @ ${file}:${finding.line}: ${finding.description}\n`;
+      summary += `  \`${finding.snippet}\`\n`;
+    }
+    if (highConfidence.length > 5) {
+      summary += `  ... and ${highConfidence.length - 5} more high-confidence findings\n`;
+    }
+  }
+
+  return summary;
+}

@@ -34,7 +34,10 @@ import {
   findNewFileReferences,
   getContextSummary,
   validateIssueEvidence,
-  EvidenceValidationResult
+  EvidenceValidationResult,
+  analyzeContextForIssues,      // [ENH: ONE-SHOT] Pre-analysis
+  generatePreAnalysisSummary,   // [ENH: ONE-SHOT] Pre-analysis summary
+  PreAnalysisResult             // [ENH: ONE-SHOT] Pre-analysis type
 } from '../state/context.js';
 import {
   initializeMediator,
@@ -73,11 +76,27 @@ import {
 // Tool Schemas
 // =============================================================================
 
+// [ENH: ONE-SHOT] Verification mode configuration schema
+export const VerificationModeSchema = z.object({
+  mode: z.enum(['standard', 'fast-track', 'single-pass']).default('standard').describe(
+    'Verification mode: standard (full Verifier↔Critic loop), fast-track (early convergence for clean code), single-pass (Verifier only)'
+  ),
+  allowEarlyConvergence: z.boolean().optional().describe('Allow convergence before minimum rounds'),
+  skipCriticForCleanCode: z.boolean().optional().describe('Skip Critic review if no issues found'),
+  requireSelfReview: z.boolean().optional().describe('Require Verifier self-review in single-pass mode'),
+  minRounds: z.number().optional().describe('Override default minimum rounds'),
+  stableRoundsRequired: z.number().optional().describe('Override stable rounds requirement')
+}).optional();
+
 export const StartSessionSchema = z.object({
   target: z.string().describe('Target path to verify (file or directory)'),
   requirements: z.string().describe('User verification requirements'),
   workingDir: z.string().describe('Working directory for relative paths'),
-  maxRounds: z.number().optional().default(10).describe('Maximum rounds before forced stop')
+  maxRounds: z.number().optional().default(10).describe('Maximum rounds before forced stop'),
+  // [ENH: ONE-SHOT] Verification mode for one-shot verification
+  verificationMode: VerificationModeSchema.describe(
+    'Verification mode configuration for controlling convergence behavior. Use "fast-track" or "single-pass" for one-shot verification.'
+  )
 });
 
 export const GetContextSchema = z.object({
@@ -127,23 +146,54 @@ export const StartReVerificationSchema = z.object({
   maxRounds: z.number().optional().default(6).describe('Maximum rounds for re-verification (default: 6)')
 });
 
+// [ENH: ONE-SHOT] In-session fix application schema
+export const ApplyFixSchema = z.object({
+  sessionId: z.string().describe('Session ID'),
+  issueId: z.string().describe('Issue ID being fixed'),
+  fixDescription: z.string().describe('Description of the fix applied'),
+  filesModified: z.array(z.string()).describe('List of files modified'),
+  triggerReVerify: z.boolean().optional().default(true).describe('Whether to trigger re-verification after fix')
+});
+
 // =============================================================================
 // Tool Implementations
 // =============================================================================
 
 /**
  * Start a new verification session
+ * [ENH: ONE-SHOT] Added verificationMode support for one-shot verification
  */
 export async function startSession(
   args: z.infer<typeof StartSessionSchema>
-): Promise<StartSessionResponse & { mediator?: object; roles?: object }> {
+): Promise<StartSessionResponse & {
+  mediator?: object;
+  roles?: object;
+  verificationMode?: object;
+  preAnalysis?: object;  // [ENH: ONE-SHOT] Pre-analysis results
+}> {
   const session = await createSession(args.target, args.requirements, args.maxRounds);
+
+  // [ENH: ONE-SHOT] Set verification mode on session
+  if (args.verificationMode) {
+    session.verificationMode = args.verificationMode;
+  }
 
   // Initialize context
   await initializeContext(session.id, args.target, args.workingDir);
   await updateSessionStatus(session.id, 'initialized');
 
   const updatedSession = await getSession(session.id);
+
+  // [ENH: ONE-SHOT] Persist verification mode to session
+  if (updatedSession && args.verificationMode) {
+    updatedSession.verificationMode = args.verificationMode;
+  }
+
+  // [ENH: ONE-SHOT] Perform pre-analysis on collected files
+  const preAnalysisResults = updatedSession
+    ? analyzeContextForIssues(updatedSession.context)
+    : [];
+  const preAnalysisSummary = generatePreAnalysisSummary(preAnalysisResults);
 
   // Initialize Mediator
   const files = updatedSession
@@ -179,6 +229,23 @@ export async function startSession(
         mustNotDo: getRoleDefinition('verifier').mustNotDo.slice(0, 3)
       },
       firstRolePrompt: verifierPrompt.systemPrompt.slice(0, 500) + '...'
+    },
+    // [ENH: ONE-SHOT] Verification mode info
+    verificationMode: args.verificationMode ? {
+      mode: args.verificationMode.mode || 'standard',
+      description: args.verificationMode.mode === 'fast-track'
+        ? 'Fast-track mode: Can converge in 1 round if no issues found'
+        : args.verificationMode.mode === 'single-pass'
+          ? 'Single-pass mode: Verifier only, no Critic review required'
+          : 'Standard mode: Full Verifier↔Critic loop',
+      settings: args.verificationMode
+    } : undefined,
+    // [ENH: ONE-SHOT] Pre-analysis results for LLM to prioritize
+    preAnalysis: {
+      totalFindings: preAnalysisResults.reduce((sum, r) => sum + r.findings.length, 0),
+      filesWithFindings: preAnalysisResults.length,
+      summary: preAnalysisSummary,
+      details: preAnalysisResults.slice(0, 10)  // Limit to top 10 files
     }
   };
 }
@@ -610,11 +677,29 @@ export async function submitRound(
   const updatedSession = await getSession(session.id);
   const convergence = checkConvergence(updatedSession!);
 
-  // Determine next role (from role enforcement)
+  // [ENH: ONE-SHOT] Determine next role based on verification mode
+  const verificationMode = updatedSession?.verificationMode?.mode || 'standard';
   const expectedNextRole = getExpectedRole(args.sessionId);
   let nextRole: 'verifier' | 'critic' | 'complete' = 'complete';
+
   if (!convergence.isConverged && session.currentRound < session.maxRounds) {
-    nextRole = expectedNextRole;
+    // [ENH: ONE-SHOT] Single-pass mode: always Verifier, never Critic
+    if (verificationMode === 'single-pass') {
+      // In single-pass mode, Verifier continues until convergence
+      nextRole = 'verifier';
+    }
+    // [ENH: ONE-SHOT] Fast-track mode: skip Critic if no issues found
+    else if (verificationMode === 'fast-track' &&
+             args.role === 'verifier' &&
+             raisedIds.length === 0 &&
+             (updatedSession?.verificationMode?.skipCriticForCleanCode ?? true)) {
+      // No issues found by Verifier, can skip Critic in fast-track mode
+      nextRole = 'verifier';  // Continue as Verifier for next round (or complete if converged)
+    }
+    // Standard mode: alternate Verifier↔Critic
+    else {
+      nextRole = expectedNextRole;
+    }
   }
 
   // Get next role prompt if not complete
@@ -708,6 +793,100 @@ export async function rollback(
   return {
     success: true,
     restoredToRound: session.currentRound
+  };
+}
+
+/**
+ * [ENH: ONE-SHOT] Apply fix and optionally trigger re-verification
+ * Keeps fix application within the same session for continuity
+ */
+export async function applyFix(
+  args: z.infer<typeof ApplyFixSchema>
+): Promise<{
+  success: boolean;
+  issueId: string;
+  status: 'RESOLVED' | 'PENDING_VERIFY';
+  nextAction: string;
+  reVerifyRequired: boolean;
+} | null> {
+  const session = await getSession(args.sessionId);
+  if (!session) return null;
+
+  // Find the issue
+  const issue = session.issues.find(i => i.id === args.issueId);
+  if (!issue) {
+    return {
+      success: false,
+      issueId: args.issueId,
+      status: 'PENDING_VERIFY',
+      nextAction: `Issue ${args.issueId} not found`,
+      reVerifyRequired: false
+    };
+  }
+
+  // Create checkpoint before fix
+  await createCheckpoint(args.sessionId);
+
+  // Update issue with fix information
+  issue.resolution = args.fixDescription;
+  issue.status = args.triggerReVerify ? 'RAISED' : 'RESOLVED';  // Keep as RAISED if re-verify needed
+
+  // Add transition record
+  if (!issue.transitions) {
+    issue.transitions = [];
+  }
+  issue.transitions.push({
+    type: 'REFINED',
+    fromStatus: 'RAISED',
+    toStatus: args.triggerReVerify ? 'RAISED' : 'RESOLVED',
+    round: session.currentRound,
+    reason: `Fix applied: ${args.fixDescription}`,
+    triggeredBy: 'verifier',
+    timestamp: new Date().toISOString()
+  });
+
+  await upsertIssue(args.sessionId, issue);
+
+  // Refresh context for modified files
+  if (args.filesModified.length > 0) {
+    const updatedSession = await getSession(args.sessionId);
+    if (updatedSession) {
+      // Re-read modified files into context
+      for (const filePath of args.filesModified) {
+        // Remove old content
+        updatedSession.context.files.delete(filePath);
+      }
+      // Re-add with updated content
+      await expandContext(args.sessionId, args.filesModified, session.currentRound);
+
+      // Run pre-analysis on modified files
+      const preAnalysis = analyzeContextForIssues(updatedSession.context);
+      const newFindings = preAnalysis
+        .filter(r => args.filesModified.some((f: string) => r.file.includes(f)))
+        .reduce((sum, r) => sum + r.findings.length, 0);
+
+      if (newFindings > 0) {
+        return {
+          success: true,
+          issueId: args.issueId,
+          status: 'PENDING_VERIFY',
+          nextAction: `⚠️ Fix applied but pre-analysis found ${newFindings} new potential issues in modified files. Re-verification recommended.`,
+          reVerifyRequired: true
+        };
+      }
+    }
+  }
+
+  const nextAction = args.triggerReVerify
+    ? 'Submit a Verifier round to verify the fix is complete and correct'
+    : 'Issue marked as resolved. Continue with remaining issues or end session.';
+
+  return {
+    success: true,
+    issueId: args.issueId,
+    status: args.triggerReVerify ? 'PENDING_VERIFY' : 'RESOLVED',
+    nextAction,
+    reVerifyRequired: args.triggerReVerify ?? true
   };
 }
 
@@ -1115,5 +1294,11 @@ export const tools = {
     description: 'Start a re-verification session for resolved issues. Links to a previous verification session and focuses on verifying that fixes are correct and complete. Returns focused verification context with target issues.',
     schema: StartReVerificationSchema,
     handler: startReVerification
+  },
+  // [ENH: ONE-SHOT] In-session fix application tool
+  elenchus_apply_fix: {
+    description: 'Apply a fix for an issue within the current session. Creates checkpoint, updates issue status, refreshes file context, and optionally triggers re-verification. Use this to maintain fix-verify continuity without starting new sessions.',
+    schema: ApplyFixSchema,
+    handler: applyFix
   }
 };

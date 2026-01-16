@@ -603,19 +603,51 @@ export function checkConvergence(session: Session): ConvergenceStatus {
   const hasHighRiskCoverage = unreviewedHighRisk.length === 0;
 
   // =============================================================================
-  // Convergence Decision
+  // [ENH: ONE-SHOT] Convergence Decision with Verification Mode Support
   // =============================================================================
-  
-  const isConverged =
+
+  const mode = session.verificationMode?.mode || 'standard';
+  const minRounds = session.verificationMode?.minRounds ?? (mode === 'standard' ? 3 : mode === 'fast-track' ? 1 : 1);
+  const stableRoundsRequired = session.verificationMode?.stableRoundsRequired ?? (mode === 'standard' ? 2 : 1);
+
+  // [ENH: ONE-SHOT] Fast-track convergence for clean code
+  const isCleanCode = unresolvedIssues === 0 && session.issues.length === 0;
+  const canFastTrack = mode === 'fast-track' || mode === 'single-pass';
+  const skipStrictChecks = canFastTrack && isCleanCode;
+
+  // Standard convergence criteria
+  const standardConvergence =
     criticalUnresolved === 0 &&
     highUnresolved === 0 &&
-    roundsWithoutNewIssues >= 2 &&
-    session.currentRound >= 3 &&
+    roundsWithoutNewIssues >= stableRoundsRequired &&
+    session.currentRound >= minRounds &&
     allCategoriesExamined &&
     issuesStabilized &&
     hasEdgeCaseCoverage &&
     hasNegativeAssertions &&
     hasHighRiskCoverage;
+
+  // [ENH: ONE-SHOT] Fast-track convergence for clean code
+  // If no issues found after thorough check, allow early convergence
+  const fastTrackConvergence =
+    canFastTrack &&
+    criticalUnresolved === 0 &&
+    highUnresolved === 0 &&
+    allCategoriesExamined &&
+    hasEdgeCaseCoverage &&
+    hasNegativeAssertions &&
+    session.currentRound >= 1;  // At least one complete round
+
+  // [ENH: ONE-SHOT] Single-pass convergence (most aggressive)
+  // Converge if Verifier completed thorough check with no CRITICAL/HIGH issues
+  const singlePassConvergence =
+    mode === 'single-pass' &&
+    criticalUnresolved === 0 &&
+    highUnresolved === 0 &&
+    allCategoriesExamined &&
+    session.currentRound >= 1;
+
+  const isConverged = standardConvergence || fastTrackConvergence || singlePassConvergence;
 
   // Build detailed reason
   let reason: string;
@@ -623,7 +655,8 @@ export function checkConvergence(session: Session): ConvergenceStatus {
     const impactInfo = impactedFiles.size > 0
       ? `, impact coverage: ${(impactCoverageRate * 100).toFixed(0)}%`
       : '';
-    reason = `All critical/high issues resolved, all categories examined, edge cases analyzed, issues stabilized, 2+ rounds stable${impactInfo}`;
+    const modeInfo = mode !== 'standard' ? ` [${mode} mode]` : '';
+    reason = `All critical/high issues resolved, all categories examined, edge cases analyzed, issues stabilized, ${roundsWithoutNewIssues}+ rounds stable${impactInfo}${modeInfo}`;
   } else if (criticalUnresolved > 0) {
     reason = `${criticalUnresolved} CRITICAL issues unresolved`;
   } else if (highUnresolved > 0) {
@@ -636,10 +669,10 @@ export function checkConvergence(session: Session): ConvergenceStatus {
     reason = 'Missing negative assertions - must state what was verified as clean';
   } else if (!hasHighRiskCoverage) {
     reason = `High-risk impacted files not reviewed: ${unreviewedHighRisk.slice(0, 3).join(', ')}`;
-  } else if (!issuesStabilized) {
+  } else if (!issuesStabilized && mode === 'standard') {
     reason = `Issues still changing (${recentTransitions} recent transitions)`;
-  } else if (session.currentRound < 3) {
-    reason = `Minimum 3 rounds required (current: ${session.currentRound})`;
+  } else if (session.currentRound < minRounds) {
+    reason = `Minimum ${minRounds} round(s) required (current: ${session.currentRound}) [${mode} mode]`;
   } else {
     reason = 'Verification in progress';
   }

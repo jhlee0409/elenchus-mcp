@@ -33,10 +33,16 @@ npm run inspector  # Launch MCP Inspector for debugging
 - State management: `checkpoint`, `rollback`
 - Analysis: `rippleEffect`, `mediatorSummary`
 - Role enforcement: `getRolePrompt`, `roleSummary`, `updateRoleConfig`
+- [ENH: ONE-SHOT] Fix application: `applyFix` - Apply fixes within session, refresh context, trigger re-verify
 
 **src/state/session.ts** - Session persistence and convergence detection:
 - Sessions stored at `~/.claude/elenchus/sessions/`
 - `checkConvergence()` - Intent-based convergence with 5 categories, edge case coverage, impact analysis
+- [ENH: ONE-SHOT] Supports `fast-track` and `single-pass` modes for faster convergence
+
+**src/state/context.ts** - Context and pre-analysis:
+- [ENH: ONE-SHOT] `analyzeContextForIssues()` - Lightweight static analysis on initialization
+- Pre-identifies obvious issues (eval, innerHTML, hardcoded secrets, etc.) before LLM verification
 
 **src/mediator/** - Dependency analysis and proactive intervention:
 - Builds import/export dependency graph
@@ -56,6 +62,29 @@ npm run inspector  # Launch MCP Inspector for debugging
 - `complete` - Full pipeline until zero issues
 - `cross-verify` - Adversarial cross-verification
 
+### Verification Modes [ENH: ONE-SHOT]
+
+Three verification modes for different use cases:
+
+| Mode | Description | Min Rounds | Critic Required |
+|------|-------------|------------|-----------------|
+| `standard` | Full Verifier↔Critic loop | 3 | Yes |
+| `fast-track` | Early convergence for clean code | 1 | Optional (skipped if no issues) |
+| `single-pass` | Verifier only, fastest mode | 1 | No |
+
+**Usage:**
+```javascript
+elenchus_start_session({
+  target: "src/",
+  requirements: "security audit",
+  workingDir: "/project",
+  verificationMode: {
+    mode: "fast-track",  // or "standard", "single-pass"
+    skipCriticForCleanCode: true
+  }
+})
+```
+
 ### Convergence Criteria
 
 A session converges when ALL conditions are met:
@@ -65,8 +94,8 @@ A session converges when ALL conditions are met:
 - Negative assertions present (explicit "no issues" statements)
 - High-risk impacted files reviewed
 - Issues stabilized (no recent transitions)
-- Minimum 3 rounds completed
-- 2+ consecutive rounds without new issues
+- Minimum rounds completed (varies by mode: standard=3, fast-track/single-pass=1)
+- Stable rounds without new issues (standard=2, others=1)
 
 ### Issue Lifecycle
 

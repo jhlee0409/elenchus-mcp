@@ -204,6 +204,25 @@ export interface Checkpoint {
   canRollbackTo: boolean;
 }
 
+// [ENH: ONE-SHOT] Verification mode for controlling convergence behavior
+export type VerificationMode =
+  | 'standard'      // Default: Verifier↔Critic loop, minimum 3 rounds
+  | 'fast-track'    // Relaxed: Can converge in 1 round if no issues
+  | 'single-pass';  // Aggressive: Verifier only, no Critic review required
+
+// [ENH: ONE-SHOT] Verification mode configuration
+export interface VerificationModeConfig {
+  mode: VerificationMode;
+  // Fast-track settings
+  allowEarlyConvergence?: boolean;    // Allow convergence before 3 rounds
+  skipCriticForCleanCode?: boolean;   // Skip Critic if Verifier finds no issues
+  // Single-pass settings
+  requireSelfReview?: boolean;        // Verifier must self-review in single-pass
+  // Convergence thresholds
+  minRounds?: number;                 // Override default minimum rounds
+  stableRoundsRequired?: number;      // Override stable rounds requirement
+}
+
 export interface Session {
   id: string;
   target: string;
@@ -223,6 +242,8 @@ export interface Session {
   // [ENH: REVERIFY] Re-verification tracking
   reVerificationTargets?: string[];  // Issue IDs to re-verify
   previousVerificationId?: string;   // Link to original verification session
+  // [ENH: ONE-SHOT] Verification mode for one-shot verification
+  verificationMode?: VerificationModeConfig;
 }
 
 // =============================================================================
