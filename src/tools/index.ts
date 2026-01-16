@@ -19,6 +19,7 @@ import {
   updateSessionStatus,
   addRound,
   upsertIssue,
+  batchUpsertIssues,
   createCheckpoint,
   rollbackToCheckpoint,
   checkConvergence,
@@ -59,9 +60,87 @@ import {
   getRoleEnforcementSummary,
   updateRoleConfig,
   deleteRoleState,  // [FIX: REL-02]
-  getRoleState      // [ENH: CRIT-01] For strict mode check
+  getRoleState,     // [ENH: CRIT-01] For strict mode check
+  shouldUseConciseModeForSession  // [ENH: CONCISE]
 } from '../roles/index.js';
+// [ENH: DIFF] Differential Analysis imports
+import {
+  getDiffForSession,
+  shouldUseDifferentialMode,
+  findAffectedDependencies,
+  generateDiffSummary,
+  saveBaseline,
+  loadBaseline,
+  createBaselineFromSession,
+  getProjectIndex,
+  getGitCommitHash,
+  getGitBranch,
+  DifferentialConfig,
+  DiffResult,
+  DEFAULT_DIFFERENTIAL_CONFIG
+} from '../diff/index.js';
+// [ENH: CACHE] Response caching imports
+import {
+  initializeCache,
+  getCachedVerification,
+  cacheVerification,
+  batchLookupCache,
+  estimateTokenSavings,
+  generateCacheSummary,
+  clearCache,
+  getCacheStats,
+  CacheConfig,
+  DEFAULT_CACHE_CONFIG
+} from '../cache/index.js';
+// [ENH: CHUNK] Selective context chunking imports
+import {
+  chunkContextFiles,
+  getChunksForLocation,
+  ChunkingConfig,
+  DEFAULT_CHUNKING_CONFIG,
+  CodeChunk
+} from '../chunking/index.js';
+// [ENH: TIERED] Tiered pipeline imports
+import {
+  initializePipeline,
+  getPipelineState,
+  getCurrentTierPrompt,
+  completeTier,
+  escalateTier,
+  getFilesForTier,
+  generatePipelineSummary,
+  deletePipelineState,
+  PipelineConfig,
+  DEFAULT_PIPELINE_CONFIG,
+  VerificationTier
+} from '../pipeline/index.js';
 import { RoleComplianceResult, VerifierRole } from '../roles/types.js';
+// [ENH: SAFEGUARDS] Quality safeguards imports
+import {
+  initializeSafeguards,
+  getSafeguardsState,
+  updateQualityAssessment,
+  generateSafeguardsSummary,
+  shouldAllowConvergence,
+  deleteSafeguardsState,
+  shouldForceFullVerification,
+  recordIncremental,
+  recordFullVerification,
+  getPeriodicStatus,
+  calculateCacheConfidence,
+  calculateChunkConfidence,
+  calculateTierConfidence,
+  aggregateSessionConfidence,
+  selectFilesForSampling,
+  recordSamplingResult,
+  getSamplingStats,
+  shouldRecommendFullVerification,
+  SafeguardsState,
+  FileConfidence,
+  DEFAULT_PERIODIC_CONFIG,
+  DEFAULT_CONFIDENCE_CONFIG,
+  DEFAULT_SAMPLING_CONFIG
+} from '../safeguards/index.js';
 // [ENH: LIFECYCLE] Import lifecycle management
 import {
   detectIssueTransitions,
@@ -88,6 +167,65 @@ export const VerificationModeSchema = z.object({
   stableRoundsRequired: z.number().optional().describe('Override stable rounds requirement')
 }).optional();
 
+// [ENH: DIFF] Differential analysis configuration schema
+export const DifferentialConfigSchema = z.object({
+  enabled: z.boolean().default(false).describe('Enable differential analysis to verify only changed code'),
+  baseRef: z.string().optional().describe('Base reference for diff: "last-verified", commit hash, branch name, or HEAD~N'),
+  includeAffectedDependencies: z.boolean().optional().default(true).describe('Include files that import changed files'),
+  maxAffectedDepth: z.number().optional().default(2).describe('Maximum depth for dependency tracing'),
+  skipUnchangedTests: z.boolean().optional().default(false).describe('Skip test files that havent changed'),
+  fallbackToFullIfNoBaseline: z.boolean().optional().default(true).describe('Fall back to full verification if no baseline exists'),
+  includeLineContext: z.boolean().optional().default(false).describe('Include line-level diff context for focused review')
+}).optional();
+
+// [ENH: CACHE] Cache configuration schema
+export const CacheConfigSchema = z.object({
+  enabled: z.boolean().default(false).describe('Enable response caching for repeated verifications'),
+  ttlSeconds: z.number().optional().default(86400).describe('Time-to-live for cache entries in seconds (default: 24 hours)'),
+  minConfidence: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional().default('MEDIUM').describe('Minimum confidence level to use cached results'),
+  cacheIssues: z.boolean().optional().default(true).describe('Cache results that contain issues'),
+  cacheCleanResults: z.boolean().optional().default(true).describe('Cache results with no issues')
+}).optional();
+
+// [ENH: CHUNK] Chunking configuration schema
+export const ChunkingConfigSchema = z.object({
+  enabled: z.boolean().default(false).describe('Enable selective context (function-level chunking)'),
+  maxTokensPerChunk: z.number().optional().default(2000).describe('Maximum tokens per chunk'),
+  includeRelated: z.boolean().optional().default(true).describe('Include related symbols in chunks'),
+  maxRelatedDepth: z.number().optional().default(1).describe('Maximum depth for related symbol inclusion'),
+  minSymbolTokensToChunk: z.number().optional().default(50).describe('Minimum symbol size to chunk separately')
+}).optional();
+
+// [ENH: TIERED] Pipeline configuration schema
+export const PipelineConfigSchema = z.object({
+  enabled: z.boolean().default(false).describe('Enable tiered verification pipeline'),
+  startTier: z.enum(['screen', 'focused', 'exhaustive']).optional().default('screen').describe('Starting verification tier'),
+  autoEscalate: z.boolean().optional().default(true).describe('Automatically escalate based on findings'),
+  maxTotalTokens: z.number().optional().default(50000).describe('Maximum total tokens across all tiers'),
+  exhaustivePatterns: z.array(z.string()).optional().describe('File patterns that always get exhaustive verification')
+}).optional();
+
+// [ENH: SAFEGUARDS] Safeguards configuration schema
+export const SafeguardsConfigSchema = z.object({
+  enabled: z.boolean().default(true).describe('Enable quality safeguards'),
+  periodic: z.object({
+    enabled: z.boolean().default(true).describe('Enable periodic full verification'),
+    incrementalThreshold: z.number().optional().default(5).describe('Number of incremental verifications before forcing full scan'),
+    maxHoursSinceFull: z.number().optional().default(24).describe('Maximum hours since last full verification'),
+    confidenceFloor: z.number().optional().default(0.6).describe('Minimum confidence to avoid full verification'),
+    alwaysFullPatterns: z.array(z.string()).optional().describe('File patterns that always require full verification')
+  }).optional(),
+  confidence: z.object({
+    minimumAcceptable: z.number().optional().default(0.7).describe('Minimum acceptable confidence score')
+  }).optional(),
+  sampling: z.object({
+    enabled: z.boolean().default(true).describe('Enable random sampling of skipped files'),
+    rate: z.number().optional().default(10).describe('Sampling rate percentage (0-100)'),
+    minSamples: z.number().optional().default(2).describe('Minimum number of files to sample'),
+    strategy: z.enum(['UNIFORM', 'RISK_WEIGHTED', 'CHANGE_WEIGHTED', 'DEPENDENCY_WEIGHTED']).optional().default('RISK_WEIGHTED').describe('Sampling strategy')
+  }).optional()
+}).optional();
+
 export const StartSessionSchema = z.object({
   target: z.string().describe('Target path to verify (file or directory)'),
   requirements: z.string().describe('User verification requirements'),
@@ -96,6 +234,26 @@ export const StartSessionSchema = z.object({
   // [ENH: ONE-SHOT] Verification mode for one-shot verification
   verificationMode: VerificationModeSchema.describe(
     'Verification mode configuration for controlling convergence behavior. Use "fast-track" or "single-pass" for one-shot verification.'
+  ),
+  // [ENH: DIFF] Differential analysis configuration
+  differentialConfig: DifferentialConfigSchema.describe(
+    'Differential analysis configuration. When enabled, only verifies code that has changed since the last verification baseline.'
+  ),
+  // [ENH: CACHE] Response caching configuration
+  cacheConfig: CacheConfigSchema.describe(
+    'Response caching configuration. When enabled, caches verification results to skip re-verification of unchanged files.'
+  ),
+  // [ENH: CHUNK] Selective context chunking configuration
+  chunkingConfig: ChunkingConfigSchema.describe(
+    'Selective context configuration. When enabled, chunks files into function-level pieces for more efficient verification.'
+  ),
+  // [ENH: TIERED] Tiered pipeline configuration
+  pipelineConfig: PipelineConfigSchema.describe(
+    'Tiered pipeline configuration. When enabled, uses screen→focused→exhaustive verification tiers with auto-escalation.'
+  ),
+  // [ENH: SAFEGUARDS] Quality safeguards configuration
+  safeguardsConfig: SafeguardsConfigSchema.describe(
+    'Quality safeguards configuration. Ensures verification quality when using optimizations (caching, chunking, tiered).'
   )
 });
 
@@ -155,6 +313,82 @@ export const ApplyFixSchema = z.object({
   triggerReVerify: z.boolean().optional().default(true).describe('Whether to trigger re-verification after fix')
 });
 
+// [ENH: DIFF] Baseline and differential analysis schemas
+export const SaveBaselineSchema = z.object({
+  sessionId: z.string().describe('Session ID of successful verification to use as baseline'),
+  workingDir: z.string().describe('Working directory for the project')
+});
+
+export const GetDiffSummarySchema = z.object({
+  workingDir: z.string().describe('Working directory for the project'),
+  baseRef: z.string().optional().describe('Base reference: "last-verified", commit hash, or branch (default: last-verified)')
+});
+
+export const GetProjectHistorySchema = z.object({
+  workingDir: z.string().describe('Working directory for the project')
+});
+
+// [ENH: CACHE] Cache management schemas
+export const GetCacheStatsSchema = z.object({
+  workingDir: z.string().optional().describe('Working directory (optional, for context)')
+});
+
+export const ClearCacheSchema = z.object({
+  confirm: z.boolean().describe('Confirm cache clear operation')
+});
+
+// [ENH: TIERED] Pipeline management schemas
+export const GetPipelineStatusSchema = z.object({
+  sessionId: z.string().describe('Session ID')
+});
+
+export const EscalateTierSchema = z.object({
+  sessionId: z.string().describe('Session ID'),
+  targetTier: z.enum(['focused', 'exhaustive']).describe('Target tier to escalate to'),
+  reason: z.string().describe('Reason for escalation'),
+  scope: z.array(z.string()).optional().describe('Files to focus on (if any)')
+});
+
+export const CompleteTierSchema = z.object({
+  sessionId: z.string().describe('Session ID'),
+  filesVerified: z.number().describe('Number of files verified'),
+  issuesFound: z.number().describe('Total issues found'),
+  criticalIssues: z.number().describe('Critical issues found'),
+  highIssues: z.number().describe('High issues found'),
+  tokensUsed: z.number().describe('Tokens used in this tier'),
+  timeMs: z.number().describe('Time taken in milliseconds')
+});
+
+// [ENH: SAFEGUARDS] Safeguards tool schemas
+export const GetSafeguardsStatusSchema = z.object({
+  sessionId: z.string().describe('Session ID'),
+  projectId: z.string().describe('Project ID (usually workingDir)')
+});
+
+export const UpdateConfidenceSchema = z.object({
+  sessionId: z.string().describe('Session ID'),
+  fileConfidences: z.array(z.object({
+    file: z.string(),
+    source: z.enum(['full', 'cache', 'chunk', 'tiered', 'sampled']),
+    score: z.number(),
+    cacheAge: z.number().optional(),
+    chunkCoverage: z.number().optional(),
+    tierLevel: z.string().optional()
+  })).describe('Confidence scores for each file')
+});
+
+export const RecordSamplingResultSchema = z.object({
+  sessionId: z.string().describe('Session ID'),
+  filePath: z.string().describe('Path of the sampled file'),
+  issuesFound: z.number().describe('Number of issues found'),
+  severities: z.array(z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'])).describe('Severities of issues found')
+});
+
+export const CheckConvergenceAllowedSchema = z.object({
+  sessionId: z.string().describe('Session ID'),
+  strictMode: z.boolean().optional().default(false).describe('Use strict quality requirements')
+});
+
 // =============================================================================
 // Tool Implementations
 // =============================================================================
@@ -162,6 +396,10 @@ export const ApplyFixSchema = z.object({
 /**
  * Start a new verification session
  * [ENH: ONE-SHOT] Added verificationMode support for one-shot verification
+ * [ENH: DIFF] Added differential analysis support
+ * [ENH: CACHE] Added response caching support
+ * [ENH: CHUNK] Added selective context chunking support
+ * [ENH: TIERED] Added tiered pipeline support
  */
 export async function startSession(
   args: z.infer<typeof StartSessionSchema>
@@ -170,6 +408,11 @@ export async function startSession(
   roles?: object;
   verificationMode?: object;
   preAnalysis?: object;  // [ENH: ONE-SHOT] Pre-analysis results
+  differential?: object; // [ENH: DIFF] Differential analysis results
+  cache?: object;        // [ENH: CACHE] Cache lookup results
+  chunking?: object;     // [ENH: CHUNK] Chunking results
+  pipeline?: object;     // [ENH: TIERED] Pipeline state
+  safeguards?: object;   // [ENH: SAFEGUARDS] Quality safeguards state
 }> {
   const session = await createSession(args.target, args.requirements, args.maxRounds);
 
@@ -182,6 +425,55 @@ export async function startSession(
   await initializeContext(session.id, args.target, args.workingDir);
   await updateSessionStatus(session.id, 'initialized');
 
+  // [ENH: DIFF] Check for differential mode and analyze changes
+  let diffResult: DiffResult | null = null;
+  const diffConfig: DifferentialConfig = args.differentialConfig
+    ? { ...DEFAULT_DIFFERENTIAL_CONFIG, ...args.differentialConfig }
+    : DEFAULT_DIFFERENTIAL_CONFIG;
+
+  if (diffConfig.enabled) {
+    const updatedSessionForDiff = await getSession(session.id);
+    if (updatedSessionForDiff) {
+      diffResult = await getDiffForSession(
+        args.workingDir,
+        diffConfig,
+        updatedSessionForDiff.context.files
+      );
+
+      // Mark files with their change status
+      if (diffResult) {
+        for (const [filePath, fileCtx] of updatedSessionForDiff.context.files) {
+          const changedFile = diffResult.changedFiles.find(f => f.path === filePath);
+          if (changedFile) {
+            fileCtx.changeStatus = changedFile.status;
+            if (changedFile.hunks) {
+              fileCtx.changedLines = changedFile.hunks.flatMap(h =>
+                Array.from({ length: h.newLines }, (_, i) => h.newStart + i)
+              );
+            }
+            fileCtx.diffSummary = `${changedFile.status}: +${changedFile.linesAdded}/-${changedFile.linesDeleted}`;
+          } else {
+            fileCtx.changeStatus = 'unchanged';
+            // Check if affected by changed files (imports a changed file)
+            if (diffConfig.includeAffectedDependencies) {
+              const changedPaths = diffResult.changedFiles.map(f => f.path);
+              const affected = findAffectedDependencies(
+                changedPaths,
+                updatedSessionForDiff.context.files,
+                diffConfig.maxAffectedDepth || 2
+              );
+              if (affected.includes(filePath)) {
+                fileCtx.affectedByChanges = true;
+              } else {
+                fileCtx.skipVerification = true;  // Can skip unchanged, unaffected files
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   const updatedSession = await getSession(session.id);
 
   // [ENH: ONE-SHOT] Persist verification mode to session
@@ -189,11 +481,38 @@ export async function startSession(
     updatedSession.verificationMode = args.verificationMode;
   }
 
+  // [ENH: CACHE] Check cache for previously verified files
+  let cacheResults: Map<string, any> | null = null;
+  let cacheSummary: string | null = null;
+  const cacheConfig: CacheConfig = args.cacheConfig
+    ? { ...DEFAULT_CACHE_CONFIG, ...args.cacheConfig, storagePath: '' }
+    : DEFAULT_CACHE_CONFIG;
+
+  if (cacheConfig.enabled && updatedSession) {
+    await initializeCache(cacheConfig);
+    cacheResults = await batchLookupCache(
+      updatedSession.context.files,
+      args.requirements,
+      cacheConfig
+    );
+    cacheSummary = generateCacheSummary(cacheResults);
+  }
+
   // [ENH: ONE-SHOT] Perform pre-analysis on collected files
   const preAnalysisResults = updatedSession
     ? analyzeContextForIssues(updatedSession.context)
     : [];
   const preAnalysisSummary = generatePreAnalysisSummary(preAnalysisResults);
+
+  // [ENH: CHUNK] Apply selective context chunking if enabled
+  let chunkingResult: { chunks: CodeChunk[]; summary: string; tokenSavings: { before: number; after: number; percentage: number } } | null = null;
+  const chunkingConfig: ChunkingConfig = args.chunkingConfig
+    ? { ...DEFAULT_CHUNKING_CONFIG, ...args.chunkingConfig, priorityCategories: ['SECURITY', 'CORRECTNESS'], alwaysIncludeTypes: ['function', 'method', 'class'] }
+    : DEFAULT_CHUNKING_CONFIG;
+
+  if (chunkingConfig.enabled && updatedSession) {
+    chunkingResult = chunkContextFiles(updatedSession.context.files, chunkingConfig);
+  }
 
   // Initialize Mediator
   const files = updatedSession
@@ -204,6 +523,43 @@ export async function startSession(
   // Initialize Role Enforcement
   const roleState = initializeRoleEnforcement(session.id);
   const verifierPrompt = getRolePrompt('verifier');
+
+  // [ENH: TIERED] Initialize pipeline if enabled
+  let pipelineState = null;
+  const pipelineConfig: PipelineConfig = args.pipelineConfig
+    ? { ...DEFAULT_PIPELINE_CONFIG, ...args.pipelineConfig, tierConfigs: DEFAULT_PIPELINE_CONFIG.tierConfigs, escalationRules: DEFAULT_PIPELINE_CONFIG.escalationRules }
+    : DEFAULT_PIPELINE_CONFIG;
+
+  if (pipelineConfig.enabled) {
+    pipelineState = initializePipeline(session.id, pipelineConfig);
+  }
+
+  // [ENH: SAFEGUARDS] Initialize quality safeguards
+  let safeguardsState: SafeguardsState | null = null;
+  if (args.safeguardsConfig?.enabled !== false) {
+    safeguardsState = initializeSafeguards(
+      session.id,
+      args.workingDir,
+      {
+        periodic: args.safeguardsConfig?.periodic,
+        confidence: args.safeguardsConfig?.confidence,
+        sampling: args.safeguardsConfig?.sampling
+      }
+    );
+
+    // Check if full verification should be forced
+    const allFiles = Array.from(updatedSession?.context.files.keys() || []);
+    const forceDecision = shouldForceFullVerification(
+      args.workingDir,
+      allFiles,
+      1.0, // Initial confidence
+      safeguardsState.periodic.config
+    );
+
+    if (forceDecision.forceFullVerification) {
+      safeguardsState.periodic.lastDecision = forceDecision;
+    }
+  }
 
   return {
     sessionId: session.id,
@@ -246,7 +602,124 @@ export async function startSession(
       filesWithFindings: preAnalysisResults.length,
       summary: preAnalysisSummary,
       details: preAnalysisResults.slice(0, 10)  // Limit to top 10 files
-    }
+    },
+    // [ENH: DIFF] Differential analysis results
+    differential: diffResult ? {
+      enabled: true,
+      method: diffResult.method,
+      baseRef: diffResult.baseRef,
+      baseTimestamp: diffResult.baseTimestamp,
+      summary: {
+        totalChanged: diffResult.summary.totalChanged,
+        totalAdded: diffResult.summary.totalAdded,
+        totalModified: diffResult.summary.totalModified,
+        totalDeleted: diffResult.summary.totalDeleted,
+        totalLinesChanged: diffResult.summary.totalLinesChanged
+      },
+      filesToVerify: diffResult.changedFiles.map(f => ({
+        path: f.path,
+        status: f.status,
+        linesChanged: f.linesAdded + f.linesDeleted
+      })),
+      skippableFiles: updatedSession
+        ? Array.from(updatedSession.context.files.entries())
+            .filter(([_, ctx]) => ctx.skipVerification)
+            .map(([path]) => path)
+        : [],
+      tokenSavingsEstimate: `~${Math.round((1 - diffResult.summary.totalChanged / (updatedSession?.context.files.size || 1)) * 100)}% context reduction`,
+      guidance: generateDiffSummary(diffResult)
+    } : (diffConfig.enabled ? {
+      enabled: true,
+      fallbackReason: 'No baseline found, using full verification',
+      suggestion: 'Run elenchus_save_baseline after successful verification to enable differential mode'
+    } : undefined),
+    // [ENH: CACHE] Cache lookup results
+    cache: cacheResults ? (() => {
+      const savings = estimateTokenSavings(cacheResults);
+      return {
+        enabled: true,
+        summary: cacheSummary,
+        stats: {
+          cachedFiles: savings.cachedFiles,
+          uncachedFiles: savings.uncachedFiles,
+          hitRate: Math.round(savings.cacheHitRate * 100) + '%',
+          estimatedTokensSaved: savings.estimatedTokensSaved
+        },
+        cachedFilePaths: Array.from(cacheResults.entries())
+          .filter(([_, r]) => r.found)
+          .map(([path, r]) => ({
+            path,
+            ageSeconds: r.ageSeconds,
+            tokensSaved: r.tokensSaved
+          }))
+          .slice(0, 20),  // Limit to 20
+        guidance: `${savings.cachedFiles} files have cached verification results. Focus on the ${savings.uncachedFiles} uncached files for detailed verification.`
+      };
+    })() : (cacheConfig.enabled ? {
+      enabled: true,
+      stats: { cachedFiles: 0, uncachedFiles: updatedSession?.context.files.size || 0 },
+      guidance: 'Cache enabled but no cached results found. Results will be cached after this session.'
+    } : undefined),
+    // [ENH: CHUNK] Chunking results
+    chunking: chunkingResult ? {
+      enabled: true,
+      summary: chunkingResult.summary,
+      stats: {
+        totalChunks: chunkingResult.chunks.length,
+        tokensBefore: chunkingResult.tokenSavings.before,
+        tokensAfter: chunkingResult.tokenSavings.after,
+        savingsPercentage: chunkingResult.tokenSavings.percentage + '%'
+      },
+      chunks: chunkingResult.chunks.slice(0, 15).map(c => ({
+        id: c.id,
+        filePath: c.filePath,
+        symbols: c.symbols.map(s => s.name),
+        tokenCount: c.tokenCount,
+        priority: c.priority,
+        hints: c.verificationHints
+      })),
+      guidance: `Code chunked into ${chunkingResult.chunks.length} pieces. Verify each chunk focusing on its specific symbols. Token savings: ${chunkingResult.tokenSavings.percentage}%`
+    } : (chunkingConfig.enabled ? {
+      enabled: true,
+      guidance: 'Chunking enabled but no chunks created (files may be too small).'
+    } : undefined),
+    // [ENH: TIERED] Pipeline state
+    pipeline: pipelineState ? {
+      enabled: true,
+      currentTier: pipelineState.currentTier,
+      tierDescription: pipelineConfig.tierConfigs[pipelineState.currentTier].description,
+      tierConfig: {
+        categories: pipelineConfig.tierConfigs[pipelineState.currentTier].categories,
+        minSeverity: pipelineConfig.tierConfigs[pipelineState.currentTier].minSeverity,
+        includeEdgeCases: pipelineConfig.tierConfigs[pipelineState.currentTier].includeEdgeCases,
+        promptStyle: pipelineConfig.tierConfigs[pipelineState.currentTier].promptStyle
+      },
+      filesToVerify: getFilesForTier(
+        updatedSession?.context.files || new Map(),
+        pipelineState.currentTier,
+        pipelineConfig
+      ).slice(0, 10),
+      guidance: `Starting with ${pipelineState.currentTier} tier. ${pipelineConfig.autoEscalate ? 'Will auto-escalate based on findings.' : 'Manual escalation only.'}`
+    } : (pipelineConfig.enabled ? {
+      enabled: true,
+      guidance: 'Pipeline enabled but not initialized.'
+    } : undefined),
+    // [ENH: SAFEGUARDS] Quality safeguards state
+    safeguards: safeguardsState ? {
+      enabled: true,
+      periodicStatus: getPeriodicStatus(args.workingDir, safeguardsState.periodic.config),
+      forceFullVerification: safeguardsState.periodic.lastDecision?.forceFullVerification || false,
+      forceReasons: safeguardsState.periodic.lastDecision?.reasons || [],
+      samplingConfig: {
+        enabled: safeguardsState.sampling.config.enabled,
+        rate: safeguardsState.sampling.config.rate,
+        strategy: safeguardsState.sampling.config.strategy
+      },
+      minimumConfidence: safeguardsState.confidence.config.minimumAcceptable,
+      guidance: safeguardsState.periodic.lastDecision?.forceFullVerification
+        ? `Full verification required: ${safeguardsState.periodic.lastDecision.reasons.join(', ')}`
+        : 'Quality safeguards active. Confidence and sampling will be tracked.'
+    } : undefined
   };
 }
 
@@ -442,22 +915,33 @@ export async function submitRound(
   }
 
   // Process new issues with evidence validation
+  // [ENH: PARALLEL] Parallelized issue processing for better performance
   const raisedIds: string[] = [];
   const newIssues: Issue[] = [];
   const evidenceValidation: Record<string, EvidenceValidationResult> = {};
 
   if (args.issuesRaised) {
-    for (const issueData of args.issuesRaised) {
-      // [ENH: HIGH-01] Validate evidence against actual file content
-      const validationResult = await validateIssueEvidence(
-        session.context,
-        issueData.location,
-        issueData.evidence
-      );
-      evidenceValidation[issueData.id] = validationResult;
+    // Phase 1: Parallel validation and impact analysis (read-only operations)
+    const processedResults = await Promise.all(
+      args.issuesRaised.map(async (issueData) => {
+        // [ENH: HIGH-01] Validate evidence against actual file content
+        const validationResult = await validateIssueEvidence(
+          session.context,
+          issueData.location,
+          issueData.evidence
+        );
 
-      // [ENH: AUTO-IMPACT] Automatically analyze impact for the issue
-      const impactAnalysis = analyzeIssueImpact(session.id, issueData.location);
+        // [ENH: AUTO-IMPACT] Automatically analyze impact for the issue
+        const impactAnalysis = analyzeIssueImpact(session.id, issueData.location);
+
+        return { issueData, validationResult, impactAnalysis };
+      })
+    );
+
+    // Phase 2: Build issue objects (synchronous)
+    const issuesToUpsert: Issue[] = [];
+    for (const { issueData, validationResult, impactAnalysis } of processedResults) {
+      evidenceValidation[issueData.id] = validationResult;
 
       const issue: Issue = {
         ...issueData,
@@ -478,10 +962,13 @@ export async function submitRound(
         issue.description += `\n\n⚠️ Impact Analysis: ${impactAnalysis.summary}`;
       }
 
-      await upsertIssue(session.id, issue);
+      issuesToUpsert.push(issue);
       raisedIds.push(issue.id);
       newIssues.push(issue);
     }
+
+    // Phase 3: Batch upsert (single write operation)
+    await batchUpsertIssues(session.id, issuesToUpsert);
   }
 
   // [ENH: CRIT-02] Process Critic verdicts on issues
@@ -702,9 +1189,14 @@ export async function submitRound(
     }
   }
 
+  // [ENH: CONCISE] Determine if concise mode should be used for next round
+  const nextRoundNumber = session.currentRound + 2;  // Next round after current submission
+  const useConciseMode = nextRole !== 'complete' &&
+    shouldUseConciseModeForSession(updatedSession!, nextRoundNumber);
+
   // Get next role prompt if not complete
   const nextRolePrompt = nextRole !== 'complete'
-    ? getRolePrompt(nextRole)
+    ? getRolePrompt(nextRole, { round: nextRoundNumber, useConciseMode })
     : undefined;
 
   return {
@@ -725,6 +1217,10 @@ export async function submitRound(
       // Add next role guidance
       nextRoleGuidelines: nextRolePrompt ? {
         role: nextRole,
+        // [ENH: CONCISE] Include concise mode info
+        conciseMode: useConciseMode,
+        round: nextRoundNumber,
+        outputFormat: useConciseMode ? 'CONCISE (<500 words)' : 'COMPREHENSIVE',
         mustDo: getRoleDefinition(nextRole as VerifierRole).mustDo.slice(0, 3),
         checklist: nextRolePrompt.checklist
       } : undefined
@@ -926,6 +1422,549 @@ export async function endSession(
  */
 export async function getSessions(): Promise<string[]> {
   return listSessions();
+}
+
+// =============================================================================
+// [ENH: DIFF] Differential Analysis Tools
+// =============================================================================
+
+/**
+ * Save verification baseline for future differential analysis
+ */
+export async function saveBaselineTool(
+  args: z.infer<typeof SaveBaselineSchema>
+): Promise<{
+  success: boolean;
+  projectPath: string;
+  baselineInfo?: {
+    timestamp: string;
+    sessionId: string;
+    totalFiles: number;
+    gitCommit?: string;
+    gitBranch?: string;
+  };
+  error?: string;
+}> {
+  const session = await getSession(args.sessionId);
+  if (!session) {
+    return {
+      success: false,
+      projectPath: args.workingDir,
+      error: `Session not found: ${args.sessionId}`
+    };
+  }
+
+  // Get git info
+  const gitCommit = await getGitCommitHash(args.workingDir);
+  const gitBranch = await getGitBranch(args.workingDir);
+
+  // Create baseline from session
+  const baseline = createBaselineFromSession(session, args.workingDir, {
+    commit: gitCommit || undefined,
+    branch: gitBranch || undefined
+  });
+
+  // Save baseline
+  await saveBaseline(args.workingDir, baseline);
+
+  return {
+    success: true,
+    projectPath: args.workingDir,
+    baselineInfo: {
+      timestamp: baseline.timestamp,
+      sessionId: baseline.sessionId,
+      totalFiles: baseline.totalFiles,
+      gitCommit: baseline.gitCommit,
+      gitBranch: baseline.gitBranch
+    }
+  };
+}
+
+/**
+ * Get differential analysis summary
+ */
+export async function getDiffSummaryTool(
+  args: z.infer<typeof GetDiffSummarySchema>
+): Promise<{
+  hasDiff: boolean;
+  canUseDifferential: boolean;
+  reason: string;
+  summary?: {
+    method: string;
+    baseRef: string;
+    baseTimestamp?: string;
+    totalChanged: number;
+    totalAdded: number;
+    totalModified: number;
+    totalDeleted: number;
+    totalLinesChanged: number;
+    changedFiles: Array<{ path: string; status: string; lines: number }>;
+    estimatedTokenSavings: string;
+  };
+  baseline?: {
+    timestamp: string;
+    sessionId: string;
+    gitCommit?: string;
+  };
+}> {
+  // Check if differential mode can be used
+  const checkResult = await shouldUseDifferentialMode(args.workingDir, {
+    enabled: true,
+    baseRef: args.baseRef || 'last-verified'
+  });
+
+  if (!checkResult.canUse) {
+    return {
+      hasDiff: false,
+      canUseDifferential: false,
+      reason: checkResult.reason
+    };
+  }
+
+  // Get the diff
+  const diffConfig: DifferentialConfig = {
+    ...DEFAULT_DIFFERENTIAL_CONFIG,
+    enabled: true,
+    baseRef: args.baseRef || 'last-verified'
+  };
+
+  // We need a dummy files map for getDiffForSession - use loadBaseline hashes
+  const baseline = await loadBaseline(args.workingDir);
+  if (!baseline) {
+    return {
+      hasDiff: false,
+      canUseDifferential: false,
+      reason: 'No baseline found'
+    };
+  }
+
+  // Create a minimal files map from baseline
+  const filesMap = new Map<string, any>();
+  for (const [path, _hash] of Object.entries(baseline.fileHashes)) {
+    filesMap.set(path, { content: '', dependencies: [], layer: 'base' as const });
+  }
+
+  const diffResult = await getDiffForSession(args.workingDir, diffConfig, filesMap);
+
+  if (!diffResult) {
+    return {
+      hasDiff: false,
+      canUseDifferential: true,
+      reason: 'No changes detected since last verification',
+      baseline: {
+        timestamp: baseline.timestamp,
+        sessionId: baseline.sessionId,
+        gitCommit: baseline.gitCommit
+      }
+    };
+  }
+
+  const totalFiles = Object.keys(baseline.fileHashes).length;
+  const estimatedSavings = Math.round((1 - diffResult.summary.totalChanged / totalFiles) * 100);
+
+  return {
+    hasDiff: true,
+    canUseDifferential: true,
+    reason: `${diffResult.summary.totalChanged} files changed since ${baseline.timestamp}`,
+    summary: {
+      method: diffResult.method,
+      baseRef: diffResult.baseRef,
+      baseTimestamp: diffResult.baseTimestamp,
+      totalChanged: diffResult.summary.totalChanged,
+      totalAdded: diffResult.summary.totalAdded,
+      totalModified: diffResult.summary.totalModified,
+      totalDeleted: diffResult.summary.totalDeleted,
+      totalLinesChanged: diffResult.summary.totalLinesChanged,
+      changedFiles: diffResult.changedFiles.map(f => ({
+        path: f.path,
+        status: f.status,
+        lines: f.linesAdded + f.linesDeleted
+      })),
+      estimatedTokenSavings: `~${estimatedSavings}% context reduction`
+    },
+    baseline: {
+      timestamp: baseline.timestamp,
+      sessionId: baseline.sessionId,
+      gitCommit: baseline.gitCommit
+    }
+  };
+}
+
+/**
+ * Get project verification history
+ */
+export async function getProjectHistoryTool(
+  args: z.infer<typeof GetProjectHistorySchema>
+): Promise<{
+  hasHistory: boolean;
+  projectPath: string;
+  history?: Array<{
+    sessionId: string;
+    timestamp: string;
+    verdict: string;
+    target: string;
+  }>;
+  lastVerified?: {
+    sessionId: string;
+    timestamp: string;
+    gitCommit?: string;
+  };
+}> {
+  const index = await getProjectIndex(args.workingDir);
+
+  if (!index) {
+    return {
+      hasHistory: false,
+      projectPath: args.workingDir
+    };
+  }
+
+  return {
+    hasHistory: true,
+    projectPath: args.workingDir,
+    history: index.history,
+    lastVerified: index.lastVerifiedSession ? {
+      sessionId: index.lastVerifiedSession,
+      timestamp: index.lastVerifiedTimestamp || '',
+      gitCommit: index.lastVerifiedCommit
+    } : undefined
+  };
+}
+
+// =============================================================================
+// [ENH: CACHE] Cache Management Tools
+// =============================================================================
+
+/**
+ * Get cache statistics
+ */
+export async function getCacheStatsTool(
+  _args: z.infer<typeof GetCacheStatsSchema>
+): Promise<{
+  totalEntries: number;
+  hitCount: number;
+  missCount: number;
+  hitRate: string;
+  averageAge: string;
+  totalTokensSaved: number;
+  storageSize: string;
+}> {
+  const stats = getCacheStats();
+
+  return {
+    totalEntries: stats.totalEntries,
+    hitCount: stats.hitCount,
+    missCount: stats.missCount,
+    hitRate: `${Math.round(stats.hitRate * 100)}%`,
+    averageAge: `${Math.round(stats.averageAge / 3600)} hours`,
+    totalTokensSaved: stats.totalTokensSaved,
+    storageSize: `${Math.round(stats.storageSize / 1024)} KB`
+  };
+}
+
+/**
+ * Clear all cache entries
+ */
+export async function clearCacheTool(
+  args: z.infer<typeof ClearCacheSchema>
+): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  if (!args.confirm) {
+    return {
+      success: false,
+      message: 'Cache clear not confirmed. Set confirm: true to proceed.'
+    };
+  }
+
+  await clearCache();
+
+  return {
+    success: true,
+    message: 'Cache cleared successfully'
+  };
+}
+
+// =============================================================================
+// [ENH: TIERED] Pipeline Management Tools
+// =============================================================================
+
+/**
+ * Get pipeline status for a session
+ */
+export async function getPipelineStatusTool(
+  args: z.infer<typeof GetPipelineStatusSchema>
+): Promise<{
+  hasPipeline: boolean;
+  state?: {
+    currentTier: VerificationTier;
+    completedTiers: VerificationTier[];
+    totalTokensUsed: number;
+    totalTimeMs: number;
+    escalations: number;
+  };
+  summary?: string;
+}> {
+  const state = getPipelineState(args.sessionId);
+
+  if (!state) {
+    return { hasPipeline: false };
+  }
+
+  return {
+    hasPipeline: true,
+    state: {
+      currentTier: state.currentTier,
+      completedTiers: state.completedTiers,
+      totalTokensUsed: state.totalTokensUsed,
+      totalTimeMs: state.totalTimeMs,
+      escalations: state.escalations.length
+    },
+    summary: generatePipelineSummary(args.sessionId) || undefined
+  };
+}
+
+/**
+ * Manually escalate to a higher tier
+ */
+export async function escalateTierTool(
+  args: z.infer<typeof EscalateTierSchema>
+): Promise<{
+  success: boolean;
+  previousTier?: VerificationTier;
+  newTier?: VerificationTier;
+  message: string;
+}> {
+  const state = getPipelineState(args.sessionId);
+  if (!state) {
+    return {
+      success: false,
+      message: 'No pipeline found for this session'
+    };
+  }
+
+  const previousTier = state.currentTier;
+  const success = escalateTier(args.sessionId, args.targetTier, args.reason, args.scope);
+
+  if (!success) {
+    return {
+      success: false,
+      previousTier,
+      message: `Cannot escalate from ${previousTier} to ${args.targetTier}`
+    };
+  }
+
+  return {
+    success: true,
+    previousTier,
+    newTier: args.targetTier,
+    message: `Escalated from ${previousTier} to ${args.targetTier}: ${args.reason}`
+  };
+}
+
+/**
+ * Complete current tier and check for escalation
+ */
+export async function completeTierTool(
+  args: z.infer<typeof CompleteTierSchema>
+): Promise<{
+  success: boolean;
+  tier?: VerificationTier;
+  shouldEscalate?: boolean;
+  nextTier?: VerificationTier;
+  escalationReason?: string;
+  message: string;
+}> {
+  const session = await getSession(args.sessionId);
+  if (!session) {
+    return { success: false, message: 'Session not found' };
+  }
+
+  const state = getPipelineState(args.sessionId);
+  if (!state) {
+    return { success: false, message: 'No pipeline found for this session' };
+  }
+
+  const result = completeTier(
+    args.sessionId,
+    {
+      tier: state.currentTier,
+      filesVerified: args.filesVerified,
+      issuesFound: args.issuesFound,
+      criticalIssues: args.criticalIssues,
+      highIssues: args.highIssues,
+      tokensUsed: args.tokensUsed,
+      timeMs: args.timeMs
+    },
+    session.issues,
+    DEFAULT_PIPELINE_CONFIG
+  );
+
+  return {
+    success: true,
+    tier: result.tierResult.tier,
+    shouldEscalate: result.shouldEscalate,
+    nextTier: result.nextTier,
+    escalationReason: result.escalationReason,
+    message: result.shouldEscalate
+      ? `Tier ${result.tierResult.tier} completed. Escalating to ${result.nextTier}: ${result.escalationReason}`
+      : `Tier ${result.tierResult.tier} completed. No escalation needed.`
+  };
+}
+
+// =============================================================================
+// [ENH: SAFEGUARDS] Quality Safeguards Tool Implementations
+// =============================================================================
+
+export async function getSafeguardsStatusTool(
+  args: z.infer<typeof GetSafeguardsStatusSchema>
+): Promise<{
+  success: boolean;
+  status?: object;
+  summary?: string;
+  message: string;
+}> {
+  const state = getSafeguardsState(args.sessionId);
+  if (!state) {
+    return { success: false, message: 'Safeguards not initialized for this session' };
+  }
+
+  const periodicStatus = getPeriodicStatus(args.projectId, state.periodic.config);
+  const summary = generateSafeguardsSummary(args.sessionId);
+
+  return {
+    success: true,
+    status: {
+      quality: state.quality,
+      periodic: periodicStatus,
+      sampling: state.sampling.tracker ? getSamplingStats(state.sampling.tracker) : null,
+      confidence: state.confidence.session?.overall || null
+    },
+    summary,
+    message: `Quality: ${state.quality.level} (${Math.round(state.quality.score * 100)}%)`
+  };
+}
+
+export async function updateConfidenceTool(
+  args: z.infer<typeof UpdateConfidenceSchema>
+): Promise<{
+  success: boolean;
+  assessment?: object;
+  recommendations?: object[];
+  message: string;
+}> {
+  const state = getSafeguardsState(args.sessionId);
+  if (!state) {
+    return { success: false, message: 'Safeguards not initialized for this session' };
+  }
+
+  // Convert input to FileConfidence format
+  const fileConfidences: FileConfidence[] = args.fileConfidences.map(fc => {
+    let confidence;
+    if (fc.source === 'cache' && fc.cacheAge !== undefined) {
+      confidence = calculateCacheConfidence(fc.cacheAge, true, true);
+    } else if (fc.source === 'chunk' && fc.chunkCoverage !== undefined) {
+      confidence = calculateChunkConfidence(fc.chunkCoverage, false, 0);
+    } else if (fc.source === 'tiered' && fc.tierLevel) {
+      confidence = calculateTierConfidence(fc.tierLevel as VerificationTier, []);
+    } else {
+      confidence = {
+        score: fc.score,
+        level: fc.score >= 0.85 ? 'HIGH' : fc.score >= 0.7 ? 'MEDIUM' : fc.score >= 0.5 ? 'LOW' : 'UNRELIABLE',
+        factors: { methodBase: fc.score, freshness: 1, contextMatch: 1, coverage: 1, historicalAccuracy: 0.9 },
+        warnings: [],
+        calculatedAt: new Date().toISOString()
+      } as any;
+    }
+
+    return {
+      file: fc.file,
+      confidence,
+      source: fc.source,
+      details: {
+        cacheAge: fc.cacheAge,
+        chunkCoverage: fc.chunkCoverage,
+        tierLevel: fc.tierLevel
+      }
+    };
+  });
+
+  const assessment = updateQualityAssessment(args.sessionId, fileConfidences);
+
+  return {
+    success: true,
+    assessment: {
+      score: assessment.score,
+      level: assessment.level,
+      metrics: assessment.metrics
+    },
+    recommendations: assessment.actions.slice(0, 3),
+    message: `Quality assessment updated: ${assessment.level} (${Math.round(assessment.score * 100)}%)`
+  };
+}
+
+export async function recordSamplingResultTool(
+  args: z.infer<typeof RecordSamplingResultSchema>
+): Promise<{
+  success: boolean;
+  stats?: object;
+  recommendation?: object;
+  message: string;
+}> {
+  const state = getSafeguardsState(args.sessionId);
+  if (!state || !state.sampling.tracker) {
+    return { success: false, message: 'Safeguards or sampling not initialized' };
+  }
+
+  // Create issue-like objects for recording
+  const issues = args.severities.map((sev, i) => ({
+    id: `sampled-${i}`,
+    severity: sev,
+    category: 'CORRECTNESS' as const,
+    summary: 'Sampled issue',
+    location: args.filePath,
+    description: '',
+    evidence: '',
+    status: 'RAISED' as const
+  }));
+
+  recordSamplingResult(state.sampling.tracker, args.filePath, issues as any);
+  const stats = getSamplingStats(state.sampling.tracker);
+  const recommendation = shouldRecommendFullVerification(state.sampling.tracker);
+
+  return {
+    success: true,
+    stats,
+    recommendation: recommendation.recommend ? {
+      recommendFullVerification: true,
+      reason: recommendation.reason
+    } : undefined,
+    message: args.issuesFound > 0
+      ? `Recorded ${args.issuesFound} issues in sampled file. Productivity: ${stats.productivityRate}%`
+      : `No issues found in sampled file.`
+  };
+}
+
+export async function checkConvergenceAllowedTool(
+  args: z.infer<typeof CheckConvergenceAllowedSchema>
+): Promise<{
+  allowed: boolean;
+  blockers: string[];
+  qualityScore?: number;
+  message: string;
+}> {
+  const result = shouldAllowConvergence(args.sessionId, args.strictMode);
+  const state = getSafeguardsState(args.sessionId);
+
+  return {
+    allowed: result.allow,
+    blockers: result.blockers,
+    qualityScore: state?.quality.score,
+    message: result.allow
+      ? 'Convergence allowed - quality safeguards passed'
+      : `Convergence blocked: ${result.blockers.join(', ')}`
+  };
 }
 
 // =============================================================================
@@ -1300,5 +2339,69 @@ export const tools = {
     description: 'Apply a fix for an issue within the current session. Creates checkpoint, updates issue status, refreshes file context, and optionally triggers re-verification. Use this to maintain fix-verify continuity without starting new sessions.',
     schema: ApplyFixSchema,
     handler: applyFix
+  },
+  // [ENH: DIFF] Differential analysis tools
+  elenchus_save_baseline: {
+    description: 'Save verification baseline after a successful session. This baseline is used for differential analysis in future verifications to only check changed code.',
+    schema: SaveBaselineSchema,
+    handler: saveBaselineTool
+  },
+  elenchus_get_diff_summary: {
+    description: 'Get differential analysis summary for a project. Shows what has changed since the last verification and estimates token savings.',
+    schema: GetDiffSummarySchema,
+    handler: getDiffSummaryTool
+  },
+  elenchus_get_project_history: {
+    description: 'Get verification history for a project including past sessions and baselines.',
+    schema: GetProjectHistorySchema,
+    handler: getProjectHistoryTool
+  },
+  // [ENH: CACHE] Cache management tools
+  elenchus_get_cache_stats: {
+    description: 'Get cache statistics including hit rate, total entries, and token savings.',
+    schema: GetCacheStatsSchema,
+    handler: getCacheStatsTool
+  },
+  elenchus_clear_cache: {
+    description: 'Clear all cached verification results. Requires confirm: true.',
+    schema: ClearCacheSchema,
+    handler: clearCacheTool
+  },
+  // [ENH: TIERED] Pipeline tools
+  elenchus_get_pipeline_status: {
+    description: 'Get current tier pipeline status including completed tiers, escalations, and token usage.',
+    schema: GetPipelineStatusSchema,
+    handler: getPipelineStatusTool
+  },
+  elenchus_escalate_tier: {
+    description: 'Manually escalate to a higher verification tier (screen → focused → exhaustive).',
+    schema: EscalateTierSchema,
+    handler: escalateTierTool
+  },
+  elenchus_complete_tier: {
+    description: 'Mark the current tier as complete and check for auto-escalation based on issues found.',
+    schema: CompleteTierSchema,
+    handler: completeTierTool
+  },
+  // [ENH: SAFEGUARDS] Quality safeguards tools
+  elenchus_get_safeguards_status: {
+    description: 'Get quality safeguards status including periodic verification, confidence, and sampling stats.',
+    schema: GetSafeguardsStatusSchema,
+    handler: getSafeguardsStatusTool
+  },
+  elenchus_update_confidence: {
+    description: 'Update confidence scores for files based on verification method (cache, chunk, tiered, etc.).',
+    schema: UpdateConfidenceSchema,
+    handler: updateConfidenceTool
+  },
+  elenchus_record_sampling_result: {
+    description: 'Record results from random sampling verification of a skipped file.',
+    schema: RecordSamplingResultSchema,
+    handler: recordSamplingResultTool
+  },
+  elenchus_check_convergence_allowed: {
+    description: 'Check if session convergence is allowed based on quality safeguards.',
+    schema: CheckConvergenceAllowedSchema,
+    handler: checkConvergenceAllowedTool
   }
 };

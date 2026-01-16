@@ -128,6 +128,12 @@ export interface FileContext {
   dependencies: string[];
   layer: 'base' | 'discovered';
   addedInRound?: number;
+  // [ENH: DIFF] Differential analysis fields
+  changeStatus?: 'unchanged' | 'modified' | 'added' | 'deleted' | 'renamed';
+  changedLines?: number[];        // Lines that changed (for focused review)
+  diffSummary?: string;           // Short diff description
+  affectedByChanges?: boolean;    // Unchanged but imports a changed file
+  skipVerification?: boolean;     // Can be skipped in differential mode
 }
 
 export interface VerificationContext {
@@ -244,6 +250,13 @@ export interface Session {
   previousVerificationId?: string;   // Link to original verification session
   // [ENH: ONE-SHOT] Verification mode for one-shot verification
   verificationMode?: VerificationModeConfig;
+  // [ENH: CONCISE] Concise output mode configuration
+  conciseModeConfig?: {
+    enabled: boolean;
+    startRound: number;
+    wordLimit: number;
+    strictFormat: boolean;
+  };
 }
 
 // =============================================================================

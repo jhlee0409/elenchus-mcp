@@ -312,6 +312,36 @@ export async function upsertIssue(
   return issue;
 }
 
+
+/**
+ * Batch upsert multiple issues in a single session write.
+ * More efficient than calling upsertIssue multiple times.
+ * [ENH: PARALLEL] Parallel issue processing support
+ */
+export async function batchUpsertIssues(
+  sessionId: string,
+  issues: Issue[]
+): Promise<Issue[]> {
+  if (issues.length === 0) return [];
+
+  const session = await getSession(sessionId);
+  if (!session) return [];
+
+  for (const issue of issues) {
+    const existingIndex = session.issues.findIndex(i => i.id === issue.id);
+    if (existingIndex >= 0) {
+      session.issues[existingIndex] = issue;
+    } else {
+      session.issues.push(issue);
+    }
+  }
+
+  session.updatedAt = new Date().toISOString();
+  await persistSession(session);
+
+  return issues;
+}
+
 /**
  * [ENH: MED-01] Deep clone an issue to prevent reference issues
  */

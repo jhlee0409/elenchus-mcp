@@ -25,6 +25,14 @@ import {
   CRITIC_ROLE
 } from './definitions.js';
 import { Session, Issue } from '../types/index.js';
+import {
+  shouldUseConciseMode,
+  getConciseVerifierPrompt,
+  getConciseCriticPrompt,
+  CONCISE_VALIDATION_CRITERIA,
+  ConciseModeConfig,
+  DEFAULT_CONCISE_CONFIG
+} from './concise-prompts.js';
 
 // =============================================================================
 // State Management
@@ -372,10 +380,37 @@ export function getExpectedRole(sessionId: string): VerifierRole {
 
 /**
  * Get role prompt
+ * [ENH: CONCISE] Supports concise mode for round 2+
  */
-export function getRolePrompt(role: VerifierRole): RolePrompt {
+export function getRolePrompt(
+  role: VerifierRole,
+  options?: { round?: number; useConciseMode?: boolean }
+): RolePrompt {
+  // If concise mode is enabled and round >= 2, return concise prompt
+  if (options?.useConciseMode && options?.round && options.round >= 2) {
+    return role === 'verifier'
+      ? getConciseVerifierPrompt(options.round)
+      : getConciseCriticPrompt(options.round);
+  }
   return ROLE_PROMPTS[role];
 }
+
+/**
+ * Check if concise mode should be used for next round
+ * [ENH: CONCISE]
+ */
+export function shouldUseConciseModeForSession(
+  session: Session,
+  nextRound: number
+): boolean {
+  return shouldUseConciseMode(session, nextRound);
+}
+
+/**
+ * Re-export concise mode utilities
+ */
+export { CONCISE_VALIDATION_CRITERIA, DEFAULT_CONCISE_CONFIG };
+export type { ConciseModeConfig };
 
 /**
  * Get role definition
