@@ -5,7 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2025-01-17
+## [1.1.0] - 2026-01-17
+
+### Added
+- **MCP Sampling Automatic Verification** - New automatic verification loop using MCP Sampling
+  - `elenchus_start_reverification` tool for re-verification sessions
+  - `/mcp__elenchus__auto-verify` prompt for automated verification
+  - Supports sampling-based LLM orchestration
+- **One-Shot Verification Modes** - Faster verification for clean code
+  - `fast-track` mode: Early convergence, skip Critic if no issues
+  - `single-pass` mode: Verifier only, fastest mode
+  - `standard` mode: Full Verifier↔Critic loop (default)
+- **Token Optimization & Quality Safeguards**
+  - Confidence scoring for verification quality
+  - Periodic safeguard checks
+  - Sampling-based quality validation
+- **Advanced Data Structures** - Algorithm optimization utilities
+  - LRU Cache, Priority Queue, Trie implementations
+  - Performance-optimized for large codebases
 
 ### Changed
 - **README Rewrite** - Complete rewrite following MCP best practices
