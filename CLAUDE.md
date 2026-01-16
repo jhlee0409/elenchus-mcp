@@ -1,0 +1,83 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+Elenchus MCP Server is an adversarial code verification system using a Verifier-Critic loop. Named after Socrates' method of refutation (ἔλεγχος), it provides state management, context sharing, and orchestration for code verification loops via the Model Context Protocol (MCP).
+
+## Build & Development Commands
+
+```bash
+npm run build      # Compile TypeScript to dist/
+npm run dev        # Watch mode with auto-rebuild
+npm run start      # Run the compiled server
+npm run inspector  # Launch MCP Inspector for debugging
+```
+
+## Architecture
+
+### Core Flow
+
+1. **Session Start** (`startSession`) - Initializes verification with target files, builds dependency graph
+2. **Round Submission** (`submitRound`) - Verifier and Critic alternate submitting analysis
+3. **Convergence Check** - Automatic evaluation after each round
+4. **Session End** (`endSession`) - Final verdict (PASS/FAIL/CONDITIONAL)
+
+### Key Modules
+
+**src/index.ts** - MCP server entry point, registers tools/resources/prompts handlers
+
+**src/tools/index.ts** - All MCP tool implementations:
+- Session lifecycle: `startSession`, `getContext`, `submitRound`, `endSession`
+- State management: `checkpoint`, `rollback`
+- Analysis: `rippleEffect`, `mediatorSummary`
+- Role enforcement: `getRolePrompt`, `roleSummary`, `updateRoleConfig`
+
+**src/state/session.ts** - Session persistence and convergence detection:
+- Sessions stored at `~/.claude/elenchus/sessions/`
+- `checkConvergence()` - Intent-based convergence with 5 categories, edge case coverage, impact analysis
+
+**src/mediator/** - Dependency analysis and proactive intervention:
+- Builds import/export dependency graph
+- Detects circular dependencies
+- Analyzes ripple effects of code changes
+- Triggers interventions (CONTEXT_EXPAND, LOOP_BREAK, SOFT_CORRECT)
+
+**src/roles/** - Verifier/Critic role definitions and enforcement:
+- Strict alternation: Verifier → Critic → Verifier → ...
+- Compliance validation with mustDo/mustNotDo rules
+- Optional strict mode that rejects non-compliant rounds
+
+**src/prompts/** - MCP prompts (slash commands):
+- `verify` - Run Verifier-Critic loop
+- `consolidate` - Create prioritized fix plan
+- `apply` - Apply fixes with verification
+- `complete` - Full pipeline until zero issues
+- `cross-verify` - Adversarial cross-verification
+
+### Convergence Criteria
+
+A session converges when ALL conditions are met:
+- Zero CRITICAL/HIGH severity unresolved issues
+- All 5 categories examined (SECURITY, CORRECTNESS, RELIABILITY, MAINTAINABILITY, PERFORMANCE)
+- Edge case analysis documented
+- Negative assertions present (explicit "no issues" statements)
+- High-risk impacted files reviewed
+- Issues stabilized (no recent transitions)
+- Minimum 3 rounds completed
+- 2+ consecutive rounds without new issues
+
+### Issue Lifecycle
+
+Issues transition through: RAISED → CHALLENGED → RESOLVED/DISMISSED/MERGED/SPLIT
+
+Critic must review issues before resolution. Verdicts: VALID, INVALID (false positive), PARTIAL.
+
+## Code Style
+
+- TypeScript strict mode enabled
+- ESM modules with `.js` extensions in imports
+- Zod schemas for all tool input validation
+- Enhancement comments use `// [ENH: TAG-ID]` format
+- Interfaces in `src/types/index.ts`, re-exported via index files
