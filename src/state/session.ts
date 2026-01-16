@@ -5,6 +5,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { z } from 'zod';
+import { StoragePaths } from '../config/index.js';
 import {
   Session,
   SessionStatus,
@@ -126,13 +127,8 @@ const SessionSchema = z.object({
   previousVerificationId: z.string().optional()
 });
 
-// Session storage directory
-const SESSIONS_DIR = path.join(
-  process.env.HOME || '~',
-  '.claude',
-  'elenchus',
-  'sessions'
-);
+// Session storage directory (client-agnostic, configurable via ELENCHUS_DATA_DIR)
+const SESSIONS_DIR = StoragePaths.sessions;
 
 // In-memory session cache
 const sessions = new Map<string, Session>();

@@ -14,14 +14,10 @@ import {
   CacheLookupResult,
   DEFAULT_CACHE_CONFIG
 } from './types.js';
+import { StoragePaths } from '../config/index.js';
 
-// Default cache directory
-const DEFAULT_CACHE_DIR = path.join(
-  process.env.HOME || process.env.USERPROFILE || '~',
-  '.claude',
-  'elenchus',
-  'cache'
-);
+// Default cache directory (client-agnostic, configurable via ELENCHUS_DATA_DIR)
+const DEFAULT_CACHE_DIR = StoragePaths.cache;
 
 // In-memory index for fast lookups
 const cacheIndex = new Map<string, {

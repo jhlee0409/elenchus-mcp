@@ -534,7 +534,7 @@ Access session data via URI-based resources:
 **Usage:**
 ```
 Read elenchus://sessions/
-Read elenchus://sessions/2024-01-15_src-auth_abc123
+Read elenchus://sessions/2026-01-17_src-auth_abc123
 ```
 
 ---
@@ -1034,12 +1034,33 @@ npm publish --access public
 
 ## Session Storage
 
-Sessions are stored globally at `~/.claude/elenchus/sessions/`:
+Sessions are stored in a **client-agnostic** location:
 
 ```
-~/.claude/elenchus/sessions/
-└── 2024-01-15_src-auth_abc123/
-    └── session.json
+~/.elenchus/
+├── sessions/          # Verification sessions
+├── baselines/         # Differential analysis baselines
+├── cache/             # Response cache
+└── safeguards/        # Quality safeguards data
+```
+
+### Storage Location Priority
+
+| Priority | Location | Description |
+|----------|----------|-------------|
+| 1 | `$ELENCHUS_DATA_DIR` | Explicit override via environment variable |
+| 2 | `$XDG_DATA_HOME/elenchus` | XDG Base Directory spec (Linux/macOS) |
+| 3 | `%LOCALAPPDATA%\elenchus` | Windows AppData |
+| 4 | `~/.elenchus` | Default fallback |
+
+### Custom Storage Location
+
+```bash
+# Set custom storage location
+export ELENCHUS_DATA_DIR=/path/to/custom/storage
+
+# Or use XDG spec
+export XDG_DATA_HOME=~/.local/share
 ```
 
 ### Why Global Storage?
@@ -1047,6 +1068,7 @@ Sessions are stored globally at `~/.claude/elenchus/sessions/`:
 - MCP servers are **stdio-based and stateless**
 - Each tool call runs as a new process
 - Global storage ensures **session ID self-sufficiency**
+- Client-agnostic design works across all MCP clients
 
 ### Session Cleanup
 
@@ -1054,10 +1076,13 @@ Sessions are preserved as audit records. Manual cleanup:
 
 ```bash
 # Delete all sessions
-rm -rf ~/.claude/elenchus/sessions/*
+rm -rf ~/.elenchus/sessions/*
 
 # Delete specific sessions
-rm -rf ~/.claude/elenchus/sessions/2024-01-15_*
+rm -rf ~/.elenchus/sessions/2026-01-17_*
+
+# Or if using custom path
+rm -rf $ELENCHUS_DATA_DIR/sessions/*
 ```
 
 ---

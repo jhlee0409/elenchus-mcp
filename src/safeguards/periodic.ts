@@ -4,7 +4,6 @@
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { homedir } from 'os';
 import { join } from 'path';
 import {
   PeriodicVerificationConfig,
@@ -15,9 +14,10 @@ import {
   DEFAULT_PERIODIC_CONFIG
 } from './types.js';
 import { Issue, Severity, IssueCategory } from '../types/index.js';
+import { StoragePaths } from '../config/index.js';
 
-// Storage path for persistent trackers
-const STORAGE_DIR = join(homedir(), '.claude', 'elenchus', 'safeguards');
+// Storage path for persistent trackers (client-agnostic, configurable via ELENCHUS_DATA_DIR)
+const STORAGE_DIR = StoragePaths.safeguards;
 const TRACKERS_FILE = join(STORAGE_DIR, 'periodic-trackers.json');
 
 // In-memory cache (loaded from disk on first access)

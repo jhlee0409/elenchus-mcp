@@ -9,13 +9,10 @@ import { createHash } from 'crypto';
 import { VerificationBaseline, ProjectIndex } from './types.js';
 import { Session } from '../types/index.js';
 import { computeFileHash } from './hash.js';
+import { StoragePaths } from '../config/index.js';
 
-const BASELINES_DIR = path.join(
-  process.env.HOME || process.env.USERPROFILE || '~',
-  '.claude',
-  'elenchus',
-  'projects'
-);
+// Baselines storage (client-agnostic, configurable via ELENCHUS_DATA_DIR)
+const BASELINES_DIR = StoragePaths.baselines;
 
 /**
  * Generate a unique hash for a project path
