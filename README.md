@@ -102,51 +102,7 @@ Elenchus is a **Model Context Protocol (MCP) server** that implements adversaria
 
 ## Quick Start
 
-```bash
-# Install with one command (Claude Code CLI)
-claude mcp add elenchus -s user -- npx -y @jhlee0409/elenchus-mcp
-
-# Restart Claude Code, then use naturally
-"Please verify src/auth for security issues"
-
-# Or use the MCP prompt
-/mcp__elenchus__verify
-```
-
-> **Note:** The `-s user` flag makes Elenchus available across all projects.
-
----
-
-## Installation
-
-### Supported Clients
-
-| Client | Status | Notes |
-|--------|--------|-------|
-| Claude Code (CLI) | ✅ Primary | Full functionality |
-| Claude Desktop | ✅ Supported | Full functionality |
-| VS Code (Copilot) | ✅ Supported | Requires v1.102+ |
-| Cursor | ✅ Supported | 40 tool limit applies |
-| Other MCP Clients | ✅ Compatible | Any stdio-based client |
-
-### Claude Code (CLI)
-
-```bash
-claude mcp add elenchus -s user -- npx -y @jhlee0409/elenchus-mcp
-```
-
-**Verify installation:**
-```bash
-claude mcp list          # List registered servers
-claude mcp get elenchus  # Check server status
-```
-
-### Claude Desktop
-
-Edit config file:
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **Linux**: `~/.config/Claude/claude_desktop_config.json`
+Add to your MCP client configuration:
 
 ```json
 {
@@ -158,6 +114,25 @@ Edit config file:
   }
 }
 ```
+
+Then use naturally with your AI assistant:
+```
+"Please verify src/auth for security issues"
+```
+
+> See [Installation](#installation) for client-specific setup instructions.
+
+---
+
+## Installation
+
+### Supported Clients
+
+| Client | Status | Notes |
+|--------|--------|-------|
+| VS Code (Copilot) | ✅ Supported | Requires v1.102+ |
+| Cursor | ✅ Supported | 40 tool limit applies |
+| Other MCP Clients | ✅ Compatible | Any stdio-based client |
 
 ### VS Code (GitHub Copilot)
 
@@ -195,8 +170,6 @@ Go to **Settings > MCP > Add new global MCP Server**:
 
 ## Usage
 
-### Natural Language (Recommended)
-
 Simply describe what you want to verify:
 
 ```
@@ -205,42 +178,9 @@ Simply describe what you want to verify:
 "Review src/api for correctness and reliability issues"
 ```
 
-Claude will automatically use Elenchus tools.
+Your AI assistant will automatically use Elenchus tools.
 
-### Explicit Tool Usage
-
-For fine-grained control, use tools directly:
-
-```typescript
-// Start a session
-elenchus_start_session({
-  target: "src/auth",
-  requirements: "Security audit focusing on authentication",
-  workingDir: "/path/to/project"
-})
-
-// Submit Verifier round
-elenchus_submit_round({
-  sessionId: "...",
-  role: "verifier",
-  output: "Full analysis...",
-  issuesRaised: [...]
-})
-
-// Submit Critic round
-elenchus_submit_round({
-  sessionId: "...",
-  role: "critic",
-  output: "Challenge results...",
-  issuesResolved: [...]
-})
-
-// End session
-elenchus_end_session({
-  sessionId: "...",
-  verdict: "PASS"
-})
-```
+> For structured workflows, see [MCP Prompts](#mcp-prompts-slash-commands).
 
 ---
 
@@ -452,14 +392,16 @@ Read elenchus://sessions/2026-01-17_src-auth_abc123
 
 ## MCP Prompts (Slash Commands)
 
-| Command | Description |
-|---------|-------------|
-| `/mcp__elenchus__verify` | Run complete Verifier↔Critic loop |
-| `/mcp__elenchus__consolidate` | Create prioritized fix plan |
-| `/mcp__elenchus__apply` | Apply fixes with verification |
-| `/mcp__elenchus__complete` | Full pipeline until zero issues |
-| `/mcp__elenchus__cross-verify` | Adversarial cross-verification |
-| `/mcp__elenchus__auto-verify` | **Automatic** verification using MCP Sampling |
+| Prompt Name | Description |
+|-------------|-------------|
+| `verify` | Run complete Verifier↔Critic loop |
+| `consolidate` | Create prioritized fix plan |
+| `apply` | Apply fixes with verification |
+| `complete` | Full pipeline until zero issues |
+| `cross-verify` | Adversarial cross-verification |
+| `auto-verify` | **Automatic** verification using MCP Sampling |
+
+> Invocation format varies by client. Check your MCP client's documentation.
 
 ---
 
@@ -516,10 +458,9 @@ Elenchus supports **fully automatic verification** using MCP Sampling capability
 | MCP Sampling | **Yes** | Server-initiated LLM requests |
 | createMessage | **Yes** | Part of Sampling capability |
 
-**Supported Clients:**
-- Claude Code (CLI) - ✅ Full support
-- Claude Desktop - ✅ Full support
-- Other clients - Check MCP Sampling support
+**Client Support:**
+- MCP Sampling capability required
+- Check your client's documentation for support
 
 ### Tool: `elenchus_auto_verify`
 
@@ -610,18 +551,14 @@ RAISED → CHALLENGED → RESOLVED
 
 A session converges when ALL criteria are met:
 
-```typescript
-isConverged =
-  criticalUnresolved === 0 &&        // No critical issues
-  highUnresolved === 0 &&            // No high-severity issues
-  roundsWithoutNewIssues >= 2 &&     // Stable for 2 rounds
-  currentRound >= minRounds &&       // Minimum rounds completed
-  allCategoriesExamined &&           // All 5 categories checked
-  issuesStabilized &&                // No recent transitions
-  hasEdgeCaseCoverage &&             // Edge cases documented
-  hasNegativeAssertions &&           // Clean areas stated
-  hasHighRiskCoverage                // Impact files reviewed
-```
+- No CRITICAL or HIGH severity unresolved issues
+- Stable for 2+ rounds (no new issues)
+- Minimum rounds completed (varies by mode)
+- All 5 categories examined
+- No recent issue state transitions
+- Edge cases documented
+- Clean areas explicitly stated (negative assertions)
+- High-risk impacted files reviewed
 
 ### Category Coverage
 
@@ -774,6 +711,9 @@ rm -rf ~/.elenchus/sessions/2026-01-17_*
 
 ## Architecture
 
+<details>
+<summary><strong>System Diagram</strong></summary>
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                       ELENCHUS MCP SERVER                            │
@@ -783,40 +723,25 @@ rm -rf ~/.elenchus/sessions/2026-01-17_*
 │  │                     MCP PROTOCOL LAYER                        │  │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐ │  │
 │  │  │  Tools   │  │Resources │  │ Prompts  │  │ Notifications│ │  │
-│  │  │  (18)    │  │  (URI)   │  │   (5)    │  │  (optional)  │ │  │
+│  │  │  (18)    │  │  (URI)   │  │   (6)    │  │  (optional)  │ │  │
 │  │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────────────┘ │  │
 │  └───────┼─────────────┼─────────────┼──────────────────────────┘  │
 │          │             │             │                              │
 │  ┌───────┴─────────────┴─────────────┴──────────────────────────┐  │
 │  │                       CORE MODULES                            │  │
-│  │                                                               │  │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │  │
-│  │  │   Session   │  │   Context   │  │  Mediator   │          │  │
-│  │  │   Manager   │  │   Manager   │  │   System    │          │  │
-│  │  │             │  │             │  │             │          │  │
-│  │  │ • Create    │  │ • Layer 0/1 │  │ • Dep Graph │          │  │
-│  │  │ • Persist   │  │ • Pre-scan  │  │ • Ripple    │          │  │
-│  │  │ • Converge  │  │ • Chunking  │  │ • Intervene │          │  │
-│  │  └─────────────┘  └─────────────┘  └─────────────┘          │  │
-│  │                                                               │  │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │  │
-│  │  │    Role     │  │   Issue     │  │  Pipeline   │          │  │
-│  │  │ Enforcement │  │  Lifecycle  │  │   (Tiered)  │          │  │
-│  │  │             │  │             │  │             │          │  │
-│  │  │ • Verifier  │  │ • Raised    │  │ • Quick     │          │  │
-│  │  │ • Critic    │  │ • Challenged│  │ • Standard  │          │  │
-│  │  │ • Validate  │  │ • Resolved  │  │ • Deep      │          │  │
-│  │  └─────────────┘  └─────────────┘  └─────────────┘          │  │
+│  │  Session Manager │ Context Manager │ Mediator System          │  │
+│  │  Role Enforcement │ Issue Lifecycle │ Pipeline (Tiered)       │  │
 │  └───────────────────────────────────────────────────────────────┘  │
 │                              │                                       │
 │                              ▼                                       │
 │                    ┌──────────────────┐                             │
 │                    │     STORAGE      │                             │
 │                    │ ~/.elenchus/     │                             │
-│                    │   sessions/      │                             │
 │                    └──────────────────┘                             │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Module Responsibilities
 
@@ -842,19 +767,6 @@ Elenchus operates with the following security considerations:
 - **Path Validation**: All file paths are validated to prevent path traversal attacks.
 - **No Secrets in Output**: Tool outputs are sanitized to avoid exposing sensitive data.
 
-### Path Traversal Prevention
-
-```typescript
-// All paths are normalized and validated
-function validatePath(input: string): string {
-  const normalized = path.normalize(input);
-  if (normalized.includes("..")) {
-    throw new Error("Path traversal detected");
-  }
-  return normalized;
-}
-```
-
 ### Permissions
 
 Elenchus requires:
@@ -874,15 +786,11 @@ Please report security vulnerabilities via [GitHub Security Advisories](https://
 <details>
 <summary><strong>Server not found / Tools not available</strong></summary>
 
-**Symptom:** Claude doesn't recognize Elenchus commands or tools.
+**Symptom:** Your MCP client doesn't recognize Elenchus commands or tools.
 
 **Solutions:**
-1. Verify installation:
-   ```bash
-   claude mcp list
-   claude mcp get elenchus
-   ```
-2. Restart Claude Code after adding the server
+1. Verify installation in your client's MCP settings
+2. Restart your MCP client after adding the server
 3. Check config syntax (JSON must be valid)
 4. Ensure Node.js ≥18 is installed:
    ```bash
@@ -912,10 +820,7 @@ Please report security vulnerabilities via [GitHub Security Advisories](https://
 **Symptom:** `elenchus_auto_verify` fails with sampling error.
 
 **Solutions:**
-1. Check client supports MCP Sampling:
-   - Claude Code CLI: ✅ Supported
-   - Claude Desktop: ✅ Supported
-   - Other clients: Check documentation
+1. Check if your MCP client supports MCP Sampling capability
 2. Use manual verification instead:
    ```typescript
    elenchus_start_session(...)
@@ -1029,10 +934,3 @@ Contributions welcome! Please:
 ## License
 
 MIT
-
----
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/jhlee0409/elenchus-mcp/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/jhlee0409/elenchus-mcp/discussions)
