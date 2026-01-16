@@ -19,7 +19,7 @@ import {
   GetPromptRequestSchema
 } from '@modelcontextprotocol/sdk/types.js';
 
-import { tools } from './tools/index.js';
+import { tools, initAutoLoopServer } from './tools/index.js';
 import { listSessions, getSession } from './state/session.js';
 import { generatePromptContent } from './prompts/index.js';
 
@@ -37,7 +37,7 @@ const server = new Server(
       tools: {},
       resources: {},
       prompts: {}
-    }
+    } as any  // [ENH: SAMPLING] Type assertion for sampling capability extension
   }
 );
 
@@ -163,8 +163,8 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
 // =============================================================================
 
 /**
- * Prompt definitions for slash commands
- * These appear as /mcp__elenchus__[name] in Claude Code
+ * Prompt definitions for MCP slash commands
+ * Clients may expose these as: /mcp__elenchus__[name] or similar patterns
  */
 const prompts = {
   verify: {
@@ -233,6 +233,28 @@ const prompts = {
       {
         name: 'question',
         description: 'Specific question or aspect to verify',
+        required: false
+      }
+    ]
+  },
+  // [ENH: SAMPLING] Auto-verification prompt
+  'auto-verify': {
+    name: 'auto-verify',
+    description: 'Run AUTOMATIC verification loop using MCP Sampling. Server autonomously orchestrates Verifier↔Critic rounds without manual intervention.',
+    arguments: [
+      {
+        name: 'target',
+        description: 'Target path to verify (file or directory)',
+        required: true
+      },
+      {
+        name: 'requirements',
+        description: 'Verification requirements or focus areas',
+        required: false
+      },
+      {
+        name: 'maxRounds',
+        description: 'Maximum rounds before stopping (default: 10)',
         required: false
       }
     ]
@@ -310,6 +332,9 @@ function getZodType(schema: any): string {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
+  // [ENH: SAMPLING] Initialize auto-loop with server instance for sampling
+  initAutoLoopServer(server);
 
   console.error('Elenchus MCP Server running on stdio');
 }

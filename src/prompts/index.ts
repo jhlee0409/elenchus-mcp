@@ -10,13 +10,15 @@ import { generateConsolidatePrompt } from './consolidate.js';
 import { generateApplyPrompt } from './apply.js';
 import { generateCompletePrompt } from './complete.js';
 import { generateCrossVerifyPrompt } from './cross-verify.js';
+import { generateAutoVerifyPrompt } from './auto-verify.js';
 
 export {
   generateVerifyPrompt,
   generateConsolidatePrompt,
   generateApplyPrompt,
   generateCompletePrompt,
-  generateCrossVerifyPrompt
+  generateCrossVerifyPrompt,
+  generateAutoVerifyPrompt
 };
 
 /**
@@ -34,6 +36,8 @@ export function generatePromptContent(name: string, args: Record<string, string>
       return generateCompletePrompt(args);
     case 'cross-verify':
       return generateCrossVerifyPrompt(args);
+    case 'auto-verify':
+      return generateAutoVerifyPrompt(args);
     default:
       return `Unknown command: ${name}`;
   }
