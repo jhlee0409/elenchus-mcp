@@ -8,6 +8,9 @@
 
 [![npm version](https://badge.fury.io/js/%40jhlee0409%2Felenchus-mcp.svg)](https://www.npmjs.com/package/@jhlee0409/elenchus-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-≥18.0.0-green.svg)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
+[![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io/)
 
 ---
 
@@ -15,7 +18,6 @@
 
 - [Overview](#overview)
 - [Key Features](#key-features)
-- [Architecture](#architecture)
 - [Quick Start](#quick-start)
 - [Installation](#installation)
 - [Usage](#usage)
@@ -23,10 +25,14 @@
 - [MCP Resources](#mcp-resources)
 - [MCP Prompts](#mcp-prompts-slash-commands)
 - [Verification Modes](#verification-modes)
+- [Automatic Verification](#automatic-verification-mcp-sampling)
 - [Issue Lifecycle](#issue-lifecycle)
 - [Convergence Detection](#convergence-detection)
 - [Token Optimization](#token-optimization)
-- [Building Your Own MCP Server](#building-your-own-mcp-server)
+- [Configuration](#configuration)
+- [Architecture](#architecture)
+- [Security](#security)
+- [Troubleshooting](#troubleshooting)
 - [Development](#development)
 - [License](#license)
 
@@ -94,73 +100,13 @@ Elenchus is a **Model Context Protocol (MCP) server** that implements adversaria
 
 ---
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                       ELENCHUS MCP SERVER                            │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │                     MCP PROTOCOL LAYER                        │  │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐ │  │
-│  │  │  Tools   │  │Resources │  │ Prompts  │  │ Notifications│ │  │
-│  │  │  (18)    │  │  (URI)   │  │   (5)    │  │  (optional)  │ │  │
-│  │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────────────┘ │  │
-│  └───────┼─────────────┼─────────────┼──────────────────────────┘  │
-│          │             │             │                              │
-│  ┌───────┴─────────────┴─────────────┴──────────────────────────┐  │
-│  │                       CORE MODULES                            │  │
-│  │                                                               │  │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │  │
-│  │  │   Session   │  │   Context   │  │  Mediator   │          │  │
-│  │  │   Manager   │  │   Manager   │  │   System    │          │  │
-│  │  │             │  │             │  │             │          │  │
-│  │  │ • Create    │  │ • Layer 0/1 │  │ • Dep Graph │          │  │
-│  │  │ • Persist   │  │ • Pre-scan  │  │ • Ripple    │          │  │
-│  │  │ • Converge  │  │ • Chunking  │  │ • Intervene │          │  │
-│  │  └─────────────┘  └─────────────┘  └─────────────┘          │  │
-│  │                                                               │  │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │  │
-│  │  │    Role     │  │   Issue     │  │  Pipeline   │          │  │
-│  │  │ Enforcement │  │  Lifecycle  │  │   (Tiered)  │          │  │
-│  │  │             │  │             │  │             │          │  │
-│  │  │ • Verifier  │  │ • Raised    │  │ • Quick     │          │  │
-│  │  │ • Critic    │  │ • Challenged│  │ • Standard  │          │  │
-│  │  │ • Validate  │  │ • Resolved  │  │ • Deep      │          │  │
-│  │  └─────────────┘  └─────────────┘  └─────────────┘          │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-│                              │                                       │
-│                              ▼                                       │
-│                    ┌──────────────────┐                             │
-│                    │     STORAGE      │                             │
-│                    │ ~/.claude/       │                             │
-│                    │   elenchus/      │                             │
-│                    │     sessions/    │                             │
-│                    └──────────────────┘                             │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### Module Responsibilities
-
-| Module | Purpose |
-|--------|---------|
-| **Session Manager** | Create, persist, and manage verification sessions |
-| **Context Manager** | Collect and organize target files and dependencies |
-| **Mediator System** | Build dependency graphs, detect issues, trigger interventions |
-| **Role Enforcement** | Ensure Verifier↔Critic alternation, validate compliance |
-| **Issue Lifecycle** | Track issue states from RAISED to RESOLVED |
-| **Pipeline** | Tiered verification (quick → standard → deep) |
-
----
-
 ## Quick Start
 
 ```bash
-# 1. Install globally with one command
+# Install with one command (Claude Code CLI)
 claude mcp add elenchus -s user -- npx -y @jhlee0409/elenchus-mcp
 
-# 2. Restart Claude Code, then use naturally
+# Restart Claude Code, then use naturally
 "Please verify src/auth for security issues"
 
 # Or use the MCP prompt
@@ -185,15 +131,8 @@ claude mcp add elenchus -s user -- npx -y @jhlee0409/elenchus-mcp
 
 ### Claude Code (CLI)
 
-**Option 1: npx (Recommended)**
 ```bash
 claude mcp add elenchus -s user -- npx -y @jhlee0409/elenchus-mcp
-```
-
-**Option 2: Global install (faster startup)**
-```bash
-npm install -g @jhlee0409/elenchus-mcp
-claude mcp add elenchus -s user -- elenchus-mcp
 ```
 
 **Verify installation:**
@@ -207,6 +146,7 @@ claude mcp get elenchus  # Check server status
 Edit config file:
 - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **Linux**: `~/.config/Claude/claude_desktop_config.json`
 
 ```json
 {
@@ -249,17 +189,6 @@ Go to **Settings > MCP > Add new global MCP Server**:
     }
   }
 }
-```
-
-### From Source
-
-```bash
-git clone https://github.com/jhlee0409/elenchus-mcp.git
-cd elenchus-mcp
-npm install && npm run build
-
-# Add to client with:
-# command: "node", args: ["/path/to/dist/index.js"]
 ```
 
 ---
@@ -323,46 +252,37 @@ elenchus_end_session({
 
 Initialize a new verification session.
 
-```typescript
-{
-  target: string,           // Target path to verify (file or directory)
-  requirements: string,     // Verification requirements/focus areas
-  workingDir: string,       // Working directory for relative paths
-  maxRounds?: number,       // Maximum rounds (default: 10)
-  verificationMode?: {
-    mode: "standard" | "fast-track" | "single-pass",
-    skipCriticForCleanCode?: boolean
-  },
-  differentialConfig?: {    // Verify only changed files
-    enabled: boolean,
-    baseRef?: string        // Git ref to compare against
-  },
-  cacheConfig?: {           // Cache previous verifications
-    enabled: boolean,
-    ttlSeconds?: number
-  },
-  chunkingConfig?: {        // Split large files into chunks
-    enabled: boolean,
-    maxChunkSize?: number
-  },
-  pipelineConfig?: {        // Tiered verification
-    enabled: boolean,
-    startTier?: "quick" | "standard" | "deep"
-  }
-}
-```
+**Inputs:**
+- `target` (string, required): Target path to verify (file or directory)
+- `requirements` (string, required): Verification requirements/focus areas
+- `workingDir` (string, required): Working directory for relative paths
+- `maxRounds` (number, optional): Maximum rounds before stopping (default: 10)
+- `verificationMode` (object, optional): Mode configuration
+  - `mode`: `"standard"` | `"fast-track"` | `"single-pass"`
+  - `skipCriticForCleanCode`: boolean
+- `differentialConfig` (object, optional): Verify only changed files
+- `cacheConfig` (object, optional): Cache previous verifications
+- `chunkingConfig` (object, optional): Split large files into chunks
+- `pipelineConfig` (object, optional): Tiered verification
 
-**Returns:** Session ID and initial context.
+**Returns:** Session ID and initial context including files collected, dependency graph stats, and role configuration.
+
+**Example:**
+```typescript
+elenchus_start_session({
+  target: "src/auth",
+  requirements: "Security audit for authentication",
+  workingDir: "/path/to/project",
+  verificationMode: { mode: "fast-track" }
+})
+```
 
 #### `elenchus_get_context`
 
 Get current session context including files, issues, and proactive guidance.
 
-```typescript
-{
-  sessionId: string
-}
-```
+**Inputs:**
+- `sessionId` (string, required): The session ID
 
 **Returns:** Files, issues summary, focus areas, unreviewed files, recommendations.
 
@@ -370,15 +290,12 @@ Get current session context including files, issues, and proactive guidance.
 
 Submit a Verifier or Critic round.
 
-```typescript
-{
-  sessionId: string,
-  role: "verifier" | "critic",
-  output: string,                    // Full agent output
-  issuesRaised?: Issue[],            // New issues (Verifier)
-  issuesResolved?: string[]          // Resolved issue IDs (Critic)
-}
-```
+**Inputs:**
+- `sessionId` (string, required): The session ID
+- `role` (`"verifier"` | `"critic"`, required): Role for this round
+- `output` (string, required): Full agent analysis output
+- `issuesRaised` (Issue[], optional): New issues (Verifier role)
+- `issuesResolved` (string[], optional): Resolved issue IDs (Critic role)
 
 **Issue Schema:**
 ```typescript
@@ -393,50 +310,48 @@ Submit a Verifier or Critic round.
 }
 ```
 
+**Returns:** Round number, convergence status, mediator interventions, role compliance score.
+
 #### `elenchus_end_session`
 
 End session with final verdict.
 
-```typescript
-{
-  sessionId: string,
-  verdict: "PASS" | "FAIL" | "CONDITIONAL"
-}
-```
+**Inputs:**
+- `sessionId` (string, required): The session ID
+- `verdict` (`"PASS"` | `"FAIL"` | `"CONDITIONAL"`, required): Final verdict
+
+**Returns:** Session summary including total rounds, issues by category and severity.
 
 #### `elenchus_get_issues`
 
 Query issues with optional filtering.
 
-```typescript
-{
-  sessionId: string,
-  status?: "all" | "unresolved" | "critical"
-}
-```
+**Inputs:**
+- `sessionId` (string, required): The session ID
+- `status` (`"all"` | `"unresolved"` | `"critical"`, optional): Filter by status
+
+**Returns:** Array of issues matching the filter.
 
 ### State Management
 
 #### `elenchus_checkpoint`
 
-Create a checkpoint for rollback.
+Create a checkpoint for potential rollback.
 
-```typescript
-{
-  sessionId: string
-}
-```
+**Inputs:**
+- `sessionId` (string, required): The session ID
+
+**Returns:** Success status and round number.
 
 #### `elenchus_rollback`
 
 Rollback to a previous checkpoint.
 
-```typescript
-{
-  sessionId: string,
-  toRound: number          // Round number to rollback to
-}
-```
+**Inputs:**
+- `sessionId` (string, required): The session ID
+- `toRound` (number, required): Round number to rollback to
+
+**Returns:** Success status and restored round number.
 
 ### Analysis Tools
 
@@ -444,27 +359,31 @@ Rollback to a previous checkpoint.
 
 Analyze impact of changing a file.
 
-```typescript
-{
-  sessionId: string,
-  changedFile: string,       // File that will be changed
-  changedFunction?: string   // Specific function (optional)
-}
-```
+**Inputs:**
+- `sessionId` (string, required): The session ID
+- `changedFile` (string, required): File that will be changed
+- `changedFunction` (string, optional): Specific function within the file
 
-**Returns:** Affected files, dependency paths, cascade depth.
+**Returns:** Affected files, dependency paths, cascade depth, and recommendations.
+
+**Example:**
+```typescript
+elenchus_ripple_effect({
+  sessionId: "...",
+  changedFile: "src/auth/login.ts",
+  changedFunction: "validateToken"
+})
+// Returns: { affectedFiles: [...], cascadeDepth: 2, totalAffected: 8 }
+```
 
 #### `elenchus_mediator_summary`
 
 Get mediator analysis summary.
 
-```typescript
-{
-  sessionId: string
-}
-```
+**Inputs:**
+- `sessionId` (string, required): The session ID
 
-**Returns:** Dependency graph stats, coverage, intervention history.
+**Returns:** Dependency graph stats, coverage metrics, intervention history.
 
 ### Role Enforcement
 
@@ -472,93 +391,45 @@ Get mediator analysis summary.
 
 Get role-specific guidelines.
 
-```typescript
-{
-  role: "verifier" | "critic"
-}
-```
+**Inputs:**
+- `role` (`"verifier"` | `"critic"`, required): Role to get prompt for
 
-**Returns:** MustDo/MustNotDo rules, templates, checklists.
+**Returns:** System prompt, output template, checklist, mustDo/mustNotDo rules, focus areas.
 
 #### `elenchus_role_summary`
 
-Get role compliance summary.
+Get role compliance summary for a session.
 
-```typescript
-{
-  sessionId: string
-}
-```
+**Inputs:**
+- `sessionId` (string, required): The session ID
 
-**Returns:** Compliance history, scores, violations.
+**Returns:** Compliance history, average scores, violations, current expected role.
 
 #### `elenchus_update_role_config`
 
 Update role enforcement settings.
 
-```typescript
-{
-  sessionId: string,
-  strictMode?: boolean,           // Reject non-compliant rounds
-  minComplianceScore?: number,    // Minimum score (0-100)
-  requireAlternation?: boolean    // Require role alternation
-}
-```
+**Inputs:**
+- `sessionId` (string, required): The session ID
+- `strictMode` (boolean, optional): Reject non-compliant rounds
+- `minComplianceScore` (number, optional): Minimum score (0-100)
+- `requireAlternation` (boolean, optional): Require role alternation
+
+**Returns:** Updated configuration.
 
 ### Re-verification
 
 #### `elenchus_start_reverification`
 
-Start re-verification of resolved issues.
+Start re-verification of resolved issues from a previous session.
 
-```typescript
-{
-  previousSessionId: string,      // Original session ID
-  workingDir: string,
-  targetIssueIds?: string[],      // Specific issues (optional)
-  maxRounds?: number
-}
-```
+**Inputs:**
+- `previousSessionId` (string, required): Original session ID
+- `workingDir` (string, required): Working directory
+- `targetIssueIds` (string[], optional): Specific issues to re-verify
+- `maxRounds` (number, optional): Maximum rounds (default: 6)
 
-### Automatic Verification (MCP Sampling)
-
-#### `elenchus_auto_verify`
-
-Run automatic verification loop using MCP Sampling. The server autonomously orchestrates Verifier↔Critic rounds without manual intervention.
-
-> **Requires**: MCP client with Sampling capability support
-
-```typescript
-{
-  target: string,              // Target path to verify
-  requirements: string,        // Verification requirements
-  workingDir: string,          // Working directory
-  config?: {
-    maxRounds?: number,        // Max rounds (default: 10)
-    maxTokens?: number,        // Max tokens per request (default: 4000)
-    stopOnCritical?: boolean,  // Stop on CRITICAL issue (default: false)
-    minRounds?: number,        // Min rounds before convergence (default: 2)
-    enableProgress?: boolean,  // Stream progress updates (default: true)
-    modelHint?: "fast" | "balanced" | "thorough",
-    includePreAnalysis?: boolean,  // Include pre-analysis (default: true)
-    autoConsolidate?: boolean      // Auto-consolidate issues (default: true)
-  }
-}
-```
-
-**Returns:** Session ID, final status, all issues, and optional consolidated fix plan.
-
-#### `elenchus_get_auto_loop_status`
-
-Query the current status of an automatic verification loop.
-
-```typescript
-{
-  sessionId: string           // Session ID to query
-}
-```
-
-**Returns:** Current round, status, issues found so far, convergence info.
+**Returns:** New session ID with focused context on target issues.
 
 ---
 
@@ -602,7 +473,7 @@ Three modes for different use cases:
 | `fast-track` | 1 | Optional | Quick validation |
 | `single-pass` | 1 | No | Fastest, Verifier-only |
 
-**Usage:**
+**Example:**
 ```typescript
 elenchus_start_session({
   target: "src/",
@@ -619,7 +490,7 @@ elenchus_start_session({
 
 ## Automatic Verification (MCP Sampling)
 
-Elenchus supports **fully automatic verification** using MCP Sampling capability. The server autonomously orchestrates the Verifier↔Critic debate loop without any manual intervention.
+Elenchus supports **fully automatic verification** using MCP Sampling capability. The server autonomously orchestrates the Verifier↔Critic debate loop without manual intervention.
 
 ### How It Works
 
@@ -650,34 +521,44 @@ Elenchus supports **fully automatic verification** using MCP Sampling capability
 - Claude Desktop - ✅ Full support
 - Other clients - Check MCP Sampling support
 
-### Usage
+### Tool: `elenchus_auto_verify`
 
+**Inputs:**
+- `target` (string, required): Target path to verify
+- `requirements` (string, required): Verification requirements
+- `workingDir` (string, required): Working directory
+- `config` (object, optional):
+  - `maxRounds`: Maximum rounds (default: 10)
+  - `maxTokens`: Max tokens per request (default: 4000)
+  - `stopOnCritical`: Stop on CRITICAL issue (default: false)
+  - `minRounds`: Min rounds before convergence (default: 2)
+  - `enableProgress`: Stream progress updates (default: true)
+  - `modelHint`: `"fast"` | `"balanced"` | `"thorough"`
+  - `includePreAnalysis`: Include static analysis (default: true)
+  - `autoConsolidate`: Generate fix plan (default: true)
+
+**Returns:** Session ID, final status, all issues, and optional consolidated fix plan.
+
+**Example:**
 ```typescript
-// Start automatic verification
 elenchus_auto_verify({
   target: "src/auth",
   requirements: "Security audit for authentication module",
   workingDir: "/path/to/project",
   config: {
     maxRounds: 10,
-    modelHint: "thorough",    // fast | balanced | thorough
-    autoConsolidate: true     // Generate fix plan at end
+    modelHint: "thorough",
+    autoConsolidate: true
   }
 })
 ```
 
-### Configuration Options
+### Tool: `elenchus_get_auto_loop_status`
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `maxRounds` | 10 | Maximum rounds before stopping |
-| `maxTokens` | 4000 | Max tokens per LLM request |
-| `stopOnCritical` | false | Stop immediately on CRITICAL issue |
-| `minRounds` | 2 | Minimum rounds before convergence allowed |
-| `enableProgress` | true | Stream progress events |
-| `modelHint` | - | Hint for model selection (client decides) |
-| `includePreAnalysis` | true | Include static analysis in first prompt |
-| `autoConsolidate` | true | Generate prioritized fix plan at end |
+**Inputs:**
+- `sessionId` (string, required): Session ID to query
+
+**Returns:** Current round, status, issues found so far, convergence info.
 
 ### Comparison: Manual vs Automatic
 
@@ -752,7 +633,8 @@ All 5 categories must be examined:
 4. **MAINTAINABILITY** - Code structure, documentation
 5. **PERFORMANCE** - Efficiency, resource usage
 
-### Edge Case Categories
+<details>
+<summary><strong>Edge Case Categories</strong></summary>
 
 Based on OWASP Testing Guide, Netflix Chaos Engineering, Google DiRT:
 
@@ -768,11 +650,14 @@ Based on OWASP Testing Guide, Netflix Chaos Engineering, Google DiRT:
 | 8 | Security | Validation bypass, session attacks |
 | 9 | Side Effects | Mid-operation changes, partial failures |
 
+</details>
+
 ---
 
 ## Token Optimization
 
-### Differential Analysis
+<details>
+<summary><strong>Differential Analysis</strong></summary>
 
 Verify only changed files:
 
@@ -785,7 +670,10 @@ Verify only changed files:
 }
 ```
 
-### Response Caching
+</details>
+
+<details>
+<summary><strong>Response Caching</strong></summary>
 
 Cache previous verification results:
 
@@ -798,7 +686,10 @@ Cache previous verification results:
 }
 ```
 
-### Selective Chunking
+</details>
+
+<details>
+<summary><strong>Selective Chunking</strong></summary>
 
 Split large files into focused chunks:
 
@@ -811,7 +702,10 @@ Split large files into focused chunks:
 }
 ```
 
-### Tiered Pipeline
+</details>
+
+<details>
+<summary><strong>Tiered Pipeline</strong></summary>
 
 Start with quick analysis, escalate if needed:
 
@@ -824,331 +718,23 @@ Start with quick analysis, escalate if needed:
 }
 ```
 
----
-
-## Building Your Own MCP Server
-
-This section explains how Elenchus is built and how you can create similar MCP servers.
-
-### MCP Protocol Overview
-
-The Model Context Protocol (MCP) is Anthropic's standard for AI tool integration:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    MCP ARCHITECTURE                          │
-├─────────────────────────────────────────────────────────────┤
-│  Host (Claude)  ←──JSON-RPC 2.0──→  MCP Server (Elenchus)  │
-│                                                              │
-│  Features:                                                   │
-│  • Tools: Functions the LLM can call                        │
-│  • Resources: Data accessible via URI                       │
-│  • Prompts: Reusable prompt templates                       │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Project Structure
-
-Recommended MCP server structure:
-
-```
-my-mcp-server/
-├── src/
-│   ├── index.ts           # Entry point, MCP server setup
-│   ├── tools/
-│   │   └── index.ts       # Tool definitions and handlers
-│   ├── resources/
-│   │   └── index.ts       # Resource definitions
-│   ├── prompts/
-│   │   └── index.ts       # Prompt templates
-│   ├── types/
-│   │   └── index.ts       # TypeScript interfaces
-│   └── state/
-│       └── index.ts       # State management
-├── package.json
-├── tsconfig.json
-└── README.md
-```
-
-### Server Initialization
-
-```typescript
-// src/index.ts
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  ListToolsRequestSchema,
-  CallToolRequestSchema,
-  ListResourcesRequestSchema,
-  ReadResourceRequestSchema,
-  ListPromptsRequestSchema,
-  GetPromptRequestSchema
-} from "@modelcontextprotocol/sdk/types.js";
-
-// 1. Create server with capabilities
-const server = new Server(
-  {
-    name: "my-mcp-server",
-    version: "1.0.0"
-  },
-  {
-    capabilities: {
-      tools: {},
-      resources: {},
-      prompts: {}
-    }
-  }
-);
-
-// 2. Register request handlers
-server.setRequestHandler(ListToolsRequestSchema, handleListTools);
-server.setRequestHandler(CallToolRequestSchema, handleCallTool);
-server.setRequestHandler(ListResourcesRequestSchema, handleListResources);
-server.setRequestHandler(ReadResourceRequestSchema, handleReadResource);
-server.setRequestHandler(ListPromptsRequestSchema, handleListPrompts);
-server.setRequestHandler(GetPromptRequestSchema, handleGetPrompt);
-
-// 3. Connect transport
-const transport = new StdioServerTransport();
-await server.connect(transport);
-```
-
-### Tool Definition with Zod
-
-```typescript
-// src/tools/index.ts
-import { z } from "zod";
-
-// Define schema with Zod
-const MyToolSchema = z.object({
-  input: z.string().describe("The input to process"),
-  options: z.object({
-    format: z.enum(["json", "text"]).default("text"),
-    validate: z.boolean().optional()
-  }).optional()
-});
-
-// Define tool
-const tools = {
-  my_tool: {
-    description: "Process input with optional formatting",
-    schema: MyToolSchema,
-    handler: async (args: z.infer<typeof MyToolSchema>) => {
-      // Implementation
-      const result = await processInput(args.input, args.options);
-      return { success: true, result };
-    }
-  }
-};
-
-// Handler for ListTools
-export async function handleListTools() {
-  return {
-    tools: Object.entries(tools).map(([name, tool]) => ({
-      name,
-      description: tool.description,
-      inputSchema: zodToJsonSchema(tool.schema)
-    }))
-  };
-}
-
-// Handler for CallTool
-export async function handleCallTool(request: CallToolRequest) {
-  const { name, arguments: args } = request.params;
-  const tool = tools[name];
-
-  // Validate with Zod
-  const parsed = tool.schema.parse(args);
-  const result = await tool.handler(parsed);
-
-  return {
-    content: [{
-      type: "text",
-      text: JSON.stringify(result, null, 2)
-    }]
-  };
-}
-```
-
-### Resource Definition
-
-```typescript
-// src/resources/index.ts
-export async function handleListResources() {
-  const sessions = await listSessions();
-
-  return {
-    resources: sessions.map(session => ({
-      uri: `myserver://sessions/${session.id}`,
-      name: `Session: ${session.id}`,
-      description: session.description,
-      mimeType: "application/json"
-    }))
-  };
-}
-
-export async function handleReadResource(request: ReadResourceRequest) {
-  const { uri } = request.params;
-  const sessionId = uri.split("/").pop();
-  const session = await getSession(sessionId);
-
-  return {
-    contents: [{
-      uri,
-      mimeType: "application/json",
-      text: JSON.stringify(session, null, 2)
-    }]
-  };
-}
-```
-
-### Prompt Definition
-
-```typescript
-// src/prompts/index.ts
-const prompts = {
-  verify: {
-    name: "verify",
-    description: "Run verification workflow",
-    arguments: [
-      {
-        name: "target",
-        description: "Target to verify",
-        required: true
-      }
-    ]
-  }
-};
-
-export async function handleListPrompts() {
-  return {
-    prompts: Object.values(prompts)
-  };
-}
-
-export async function handleGetPrompt(request: GetPromptRequest) {
-  const { name, arguments: args } = request.params;
-
-  return {
-    description: prompts[name].description,
-    messages: [{
-      role: "user",
-      content: {
-        type: "text",
-        text: generatePromptText(name, args)
-      }
-    }]
-  };
-}
-```
-
-### Best Practices
-
-#### 1. Input Validation
-
-Always validate inputs with Zod:
-
-```typescript
-const schema = z.object({
-  path: z.string()
-    .regex(/^[a-zA-Z0-9_\-./]+$/, "Invalid path characters")
-    .describe("File path to process"),
-  options: z.object({
-    strict: z.boolean().default(false)
-  }).optional()
-});
-```
-
-#### 2. Error Handling
-
-Return structured errors:
-
-```typescript
-try {
-  const result = await processRequest(args);
-  return { content: [{ type: "text", text: JSON.stringify(result) }] };
-} catch (error) {
-  return {
-    content: [{
-      type: "text",
-      text: JSON.stringify({ error: error.message })
-    }],
-    isError: true
-  };
-}
-```
-
-#### 3. State Persistence
-
-Use file-based storage for stateless stdio transport:
-
-```typescript
-const STORAGE_PATH = path.join(os.homedir(), ".myserver", "data");
-
-async function saveState(id: string, state: State) {
-  const filePath = path.join(STORAGE_PATH, `${id}.json`);
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(state, null, 2));
-}
-
-async function loadState(id: string): Promise<State | null> {
-  const filePath = path.join(STORAGE_PATH, `${id}.json`);
-  try {
-    const data = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(data);
-  } catch {
-    return null;
-  }
-}
-```
-
-#### 4. Security
-
-- Validate all paths to prevent traversal
-- Sanitize inputs before processing
-- Don't expose sensitive data in responses
-
-```typescript
-// Path traversal prevention
-function validatePath(input: string): string {
-  const normalized = path.normalize(input);
-  if (normalized.includes("..")) {
-    throw new Error("Path traversal detected");
-  }
-  return normalized;
-}
-```
-
-### Publishing
-
-```json
-// package.json
-{
-  "name": "@yourscope/my-mcp-server",
-  "version": "1.0.0",
-  "type": "module",
-  "main": "dist/index.js",
-  "bin": {
-    "my-mcp-server": "dist/index.js"
-  },
-  "files": ["dist"],
-  "scripts": {
-    "build": "tsc",
-    "prepublishOnly": "npm run build"
-  }
-}
-```
-
-```bash
-# Publish
-npm publish --access public
-```
+</details>
 
 ---
 
-## Session Storage
+## Configuration
 
-Sessions are stored in a **client-agnostic** location:
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ELENCHUS_DATA_DIR` | Custom storage directory | `~/.elenchus` |
+| `XDG_DATA_HOME` | XDG base directory (Linux/macOS) | - |
+| `LOCALAPPDATA` | Windows AppData location | - |
+
+### Storage Location
+
+Sessions and data are stored in a client-agnostic location:
 
 ```
 ~/.elenchus/
@@ -1158,70 +744,285 @@ Sessions are stored in a **client-agnostic** location:
 └── safeguards/        # Quality safeguards data
 ```
 
-### Storage Location Priority
+**Priority Order:**
+1. `$ELENCHUS_DATA_DIR` - Explicit override
+2. `$XDG_DATA_HOME/elenchus` - XDG spec
+3. `%LOCALAPPDATA%\elenchus` - Windows
+4. `~/.elenchus` - Default fallback
 
-| Priority | Location | Description |
-|----------|----------|-------------|
-| 1 | `$ELENCHUS_DATA_DIR` | Explicit override via environment variable |
-| 2 | `$XDG_DATA_HOME/elenchus` | XDG Base Directory spec (Linux/macOS) |
-| 3 | `%LOCALAPPDATA%\elenchus` | Windows AppData |
-| 4 | `~/.elenchus` | Default fallback |
-
-### Custom Storage Location
+### Custom Storage
 
 ```bash
-# Set custom storage location
+# Set custom location
 export ELENCHUS_DATA_DIR=/path/to/custom/storage
 
 # Or use XDG spec
 export XDG_DATA_HOME=~/.local/share
 ```
 
-### Why Global Storage?
-
-- MCP servers are **stdio-based and stateless**
-- Each tool call runs as a new process
-- Global storage ensures **session ID self-sufficiency**
-- Client-agnostic design works across all MCP clients
-
 ### Session Cleanup
 
 Sessions are preserved as audit records. Manual cleanup:
 
 ```bash
-# Delete all sessions
 rm -rf ~/.elenchus/sessions/*
-
-# Delete specific sessions
+# Or for specific sessions
 rm -rf ~/.elenchus/sessions/2026-01-17_*
-
-# Or if using custom path
-rm -rf $ELENCHUS_DATA_DIR/sessions/*
 ```
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                       ELENCHUS MCP SERVER                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │                     MCP PROTOCOL LAYER                        │  │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐ │  │
+│  │  │  Tools   │  │Resources │  │ Prompts  │  │ Notifications│ │  │
+│  │  │  (18)    │  │  (URI)   │  │   (5)    │  │  (optional)  │ │  │
+│  │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────────────┘ │  │
+│  └───────┼─────────────┼─────────────┼──────────────────────────┘  │
+│          │             │             │                              │
+│  ┌───────┴─────────────┴─────────────┴──────────────────────────┐  │
+│  │                       CORE MODULES                            │  │
+│  │                                                               │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │  │
+│  │  │   Session   │  │   Context   │  │  Mediator   │          │  │
+│  │  │   Manager   │  │   Manager   │  │   System    │          │  │
+│  │  │             │  │             │  │             │          │  │
+│  │  │ • Create    │  │ • Layer 0/1 │  │ • Dep Graph │          │  │
+│  │  │ • Persist   │  │ • Pre-scan  │  │ • Ripple    │          │  │
+│  │  │ • Converge  │  │ • Chunking  │  │ • Intervene │          │  │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘          │  │
+│  │                                                               │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │  │
+│  │  │    Role     │  │   Issue     │  │  Pipeline   │          │  │
+│  │  │ Enforcement │  │  Lifecycle  │  │   (Tiered)  │          │  │
+│  │  │             │  │             │  │             │          │  │
+│  │  │ • Verifier  │  │ • Raised    │  │ • Quick     │          │  │
+│  │  │ • Critic    │  │ • Challenged│  │ • Standard  │          │  │
+│  │  │ • Validate  │  │ • Resolved  │  │ • Deep      │          │  │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘          │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+│                              │                                       │
+│                              ▼                                       │
+│                    ┌──────────────────┐                             │
+│                    │     STORAGE      │                             │
+│                    │ ~/.elenchus/     │                             │
+│                    │   sessions/      │                             │
+│                    └──────────────────┘                             │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Module Responsibilities
+
+| Module | Purpose |
+|--------|---------|
+| **Session Manager** | Create, persist, and manage verification sessions |
+| **Context Manager** | Collect and organize target files and dependencies |
+| **Mediator System** | Build dependency graphs, detect issues, trigger interventions |
+| **Role Enforcement** | Ensure Verifier↔Critic alternation, validate compliance |
+| **Issue Lifecycle** | Track issue states from RAISED to RESOLVED |
+| **Pipeline** | Tiered verification (quick → standard → deep) |
+
+---
+
+## Security
+
+### Security Model
+
+Elenchus operates with the following security considerations:
+
+- **No Code Execution**: Elenchus does NOT execute the code it verifies. It performs static analysis only.
+- **Local Storage**: All session data is stored locally in `~/.elenchus/`. No data is sent to external servers.
+- **Path Validation**: All file paths are validated to prevent path traversal attacks.
+- **No Secrets in Output**: Tool outputs are sanitized to avoid exposing sensitive data.
+
+### Path Traversal Prevention
+
+```typescript
+// All paths are normalized and validated
+function validatePath(input: string): string {
+  const normalized = path.normalize(input);
+  if (normalized.includes("..")) {
+    throw new Error("Path traversal detected");
+  }
+  return normalized;
+}
+```
+
+### Permissions
+
+Elenchus requires:
+- **Read access** to target files for verification
+- **Write access** to `~/.elenchus/` for session storage
+
+### Reporting Security Issues
+
+Please report security vulnerabilities via [GitHub Security Advisories](https://github.com/jhlee0409/elenchus-mcp/security/advisories).
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+<details>
+<summary><strong>Server not found / Tools not available</strong></summary>
+
+**Symptom:** Claude doesn't recognize Elenchus commands or tools.
+
+**Solutions:**
+1. Verify installation:
+   ```bash
+   claude mcp list
+   claude mcp get elenchus
+   ```
+2. Restart Claude Code after adding the server
+3. Check config syntax (JSON must be valid)
+4. Ensure Node.js ≥18 is installed:
+   ```bash
+   node --version
+   ```
+
+</details>
+
+<details>
+<summary><strong>Session not found</strong></summary>
+
+**Symptom:** Error "Session not found: xxx"
+
+**Solutions:**
+1. List active sessions:
+   ```
+   Read elenchus://sessions/
+   ```
+2. Sessions may have been cleaned up - start a new session
+3. Verify session ID is correct (check for typos)
+
+</details>
+
+<details>
+<summary><strong>MCP Sampling not supported</strong></summary>
+
+**Symptom:** `elenchus_auto_verify` fails with sampling error.
+
+**Solutions:**
+1. Check client supports MCP Sampling:
+   - Claude Code CLI: ✅ Supported
+   - Claude Desktop: ✅ Supported
+   - Other clients: Check documentation
+2. Use manual verification instead:
+   ```typescript
+   elenchus_start_session(...)
+   elenchus_submit_round(...)
+   ```
+
+</details>
+
+<details>
+<summary><strong>Permission denied errors</strong></summary>
+
+**Symptom:** Cannot read files or write sessions.
+
+**Solutions:**
+1. Check file permissions on target directory
+2. Verify write access to `~/.elenchus/`:
+   ```bash
+   ls -la ~/.elenchus/
+   ```
+3. Try custom storage location:
+   ```bash
+   export ELENCHUS_DATA_DIR=/tmp/elenchus
+   ```
+
+</details>
+
+<details>
+<summary><strong>Role compliance rejection</strong></summary>
+
+**Symptom:** Round rejected due to compliance score.
+
+**Solutions:**
+1. Check current role requirements:
+   ```typescript
+   elenchus_get_role_prompt({ role: "verifier" })
+   ```
+2. Lower minimum compliance score:
+   ```typescript
+   elenchus_update_role_config({
+     sessionId: "...",
+     minComplianceScore: 50,
+     strictMode: false
+   })
+   ```
+3. Ensure role alternation (Verifier → Critic → Verifier)
+
+</details>
+
+### Debugging
+
+Use MCP Inspector for debugging:
+
+```bash
+npm run inspector
+# or
+npx @modelcontextprotocol/inspector node dist/index.js
+```
+
+### Getting Help
+
+- **Issues**: [GitHub Issues](https://github.com/jhlee0409/elenchus-mcp/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/jhlee0409/elenchus-mcp/discussions)
 
 ---
 
 ## Development
 
-```bash
-# Watch mode
-npm run dev
-
-# Build
-npm run build
-
-# MCP Inspector (debugging)
-npm run inspector
-
-# Start server
-npm run start
-```
-
-### Running MCP Inspector
+### Build Commands
 
 ```bash
-npx @modelcontextprotocol/inspector node dist/index.js
+npm run build      # Compile TypeScript to dist/
+npm run dev        # Watch mode with auto-rebuild
+npm run start      # Run the compiled server
+npm run inspector  # Launch MCP Inspector for debugging
 ```
+
+### Project Structure
+
+```
+elenchus-mcp/
+├── src/
+│   ├── index.ts           # Entry point, MCP server setup
+│   ├── tools/             # Tool definitions and handlers
+│   ├── resources/         # Resource definitions
+│   ├── prompts/           # Prompt templates
+│   ├── types/             # TypeScript interfaces
+│   ├── state/             # Session and context management
+│   ├── mediator/          # Dependency analysis
+│   ├── roles/             # Role enforcement
+│   ├── config/            # Configuration constants
+│   ├── cache/             # Response caching
+│   ├── chunking/          # Code chunking
+│   ├── diff/              # Differential analysis
+│   ├── pipeline/          # Tiered verification
+│   └── safeguards/        # Quality safeguards
+├── dist/                  # Compiled output
+├── package.json
+├── tsconfig.json
+└── README.md
+```
+
+### Contributing
+
+Contributions welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request
 
 ---
 
@@ -1231,11 +1032,7 @@ MIT
 
 ---
 
-## Contributing
-
-Contributions welcome! Please read our contributing guidelines and submit PRs.
-
 ## Support
 
-- Issues: [GitHub Issues](https://github.com/jhlee0409/elenchus-mcp/issues)
-- Discussions: [GitHub Discussions](https://github.com/jhlee0409/elenchus-mcp/discussions)
+- **Issues**: [GitHub Issues](https://github.com/jhlee0409/elenchus-mcp/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/jhlee0409/elenchus-mcp/discussions)

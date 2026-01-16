@@ -27,6 +27,14 @@ import { generatePromptContent } from './prompts/index.js';
 // Server Setup
 // =============================================================================
 
+// Server capabilities type with sampling extension
+interface ExtendedServerCapabilities {
+  tools: Record<string, never>;
+  resources: Record<string, never>;
+  prompts: Record<string, never>;
+  sampling?: Record<string, never>;
+}
+
 const server = new Server(
   {
     name: 'elenchus-mcp',
@@ -36,8 +44,9 @@ const server = new Server(
     capabilities: {
       tools: {},
       resources: {},
-      prompts: {}
-    } as any  // [ENH: SAMPLING] Type assertion for sampling capability extension
+      prompts: {},
+      sampling: {}  // [ENH: SAMPLING] MCP Sampling capability for auto-verification
+    } as ExtendedServerCapabilities
   }
 );
 
@@ -56,13 +65,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           Object.entries(tool.schema.shape).map(([key, value]) => [
             key,
             {
-              type: getZodType(value),
-              description: (value as any)._def?.description || ''
+              type: getZodType(value as ZodSchemaLike),
+              description: getZodDescription(value as ZodSchemaLike)
             }
           ])
         ),
         required: Object.keys(tool.schema.shape).filter(
-          key => !(tool.schema.shape as any)[key].isOptional()
+          key => !isZodOptional((tool.schema.shape as Record<string, ZodSchemaLike>)[key])
         )
       }
     }))
@@ -297,10 +306,28 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
 });
 
 // =============================================================================
-// Helpers
+// Helpers - Zod Schema Introspection
 // =============================================================================
 
-function getZodType(schema: any): string {
+/**
+ * Zod schema internal definition type (for introspection)
+ * Note: This accesses Zod internals which may change between versions
+ */
+interface ZodSchemaDef {
+  typeName?: string;
+  description?: string;
+  innerType?: { _def?: ZodSchemaDef };
+}
+
+interface ZodSchemaLike {
+  _def?: ZodSchemaDef;
+  isOptional?: () => boolean;
+}
+
+/**
+ * Extract JSON Schema type from Zod schema
+ */
+function getZodType(schema: ZodSchemaLike): string {
   const typeName = schema._def?.typeName;
 
   switch (typeName) {
@@ -317,12 +344,28 @@ function getZodType(schema: any): string {
     case 'ZodEnum':
       return 'string';
     case 'ZodOptional':
-      return getZodType(schema._def.innerType);
+      return getZodType(schema._def?.innerType ?? {});
     case 'ZodDefault':
-      return getZodType(schema._def.innerType);
+      return getZodType(schema._def?.innerType ?? {});
     default:
       return 'string';
   }
+}
+
+/**
+ * Extract description from Zod schema
+ */
+function getZodDescription(schema: ZodSchemaLike): string {
+  return schema._def?.description ?? '';
+}
+
+/**
+ * Check if Zod schema field is optional
+ */
+function isZodOptional(schema: ZodSchemaLike): boolean {
+  return schema._def?.typeName === 'ZodOptional' ||
+         schema._def?.typeName === 'ZodDefault' ||
+         (typeof schema.isOptional === 'function' && schema.isOptional());
 }
 
 // =============================================================================

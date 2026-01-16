@@ -77,6 +77,21 @@ export interface RoleComplianceResult {
   suggestions: string[];
 }
 
+/**
+ * Extended RoleComplianceResult with next role guidance
+ * Used in submitRound response to provide guidance for the next round
+ */
+export interface RoleComplianceResultWithGuidance extends RoleComplianceResult {
+  nextRoleGuidelines?: {
+    role: VerifierRole | 'complete';
+    conciseMode: boolean;
+    round: number;
+    outputFormat: string;
+    mustDo: string[];
+    checklist: string[];
+  };
+}
+
 export interface RoleViolation {
   criterionId: string;
   severity: 'ERROR' | 'WARNING';

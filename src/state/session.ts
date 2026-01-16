@@ -358,7 +358,26 @@ function deepCloneIssue(issue: Issue): Issue {
     // [ENH: CRIT-02] Include critic review fields
     criticReviewed: issue.criticReviewed,
     criticVerdict: issue.criticVerdict,
-    criticReviewRound: issue.criticReviewRound
+    criticReviewRound: issue.criticReviewRound,
+    // [ENH: LIFECYCLE] Issue lifecycle tracking fields
+    transitions: issue.transitions ? issue.transitions.map(t => ({ ...t })) : undefined,
+    mergedInto: issue.mergedInto,
+    splitFrom: issue.splitFrom,
+    splitInto: issue.splitInto ? [...issue.splitInto] : undefined,
+    relatedIssues: issue.relatedIssues ? [...issue.relatedIssues] : undefined,
+    originalSeverity: issue.originalSeverity,
+    discoveredDuringDebate: issue.discoveredDuringDebate,
+    // [ENH: AUTO-IMPACT] Impact analysis (deep clone nested object)
+    impactAnalysis: issue.impactAnalysis ? {
+      callers: issue.impactAnalysis.callers.map(c => ({ ...c, functions: c.functions ? [...c.functions] : undefined })),
+      dependencies: issue.impactAnalysis.dependencies.map(d => ({ ...d, functions: d.functions ? [...d.functions] : undefined })),
+      relatedTests: [...issue.impactAnalysis.relatedTests],
+      affectedFunctions: [...issue.impactAnalysis.affectedFunctions],
+      cascadeDepth: issue.impactAnalysis.cascadeDepth,
+      totalAffectedFiles: issue.impactAnalysis.totalAffectedFiles,
+      riskLevel: issue.impactAnalysis.riskLevel,
+      summary: issue.impactAnalysis.summary
+    } : undefined
   };
 }
 

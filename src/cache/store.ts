@@ -15,6 +15,7 @@ import {
   DEFAULT_CACHE_CONFIG
 } from './types.js';
 import { StoragePaths } from '../config/index.js';
+import { IssueCategory } from '../types/index.js';
 
 // Default cache directory (client-agnostic, configurable via ELENCHUS_DATA_DIR)
 const DEFAULT_CACHE_DIR = StoragePaths.cache;
@@ -55,12 +56,12 @@ export async function initializeCache(config: Partial<CacheConfig> = {}): Promis
 export function generateCacheKey(
   content: string,
   requirements: string,
-  category?: string
+  category?: IssueCategory
 ): CacheKey {
   return {
     contentHash: createHash('sha256').update(content).digest('hex').slice(0, 16),
     requirementsHash: createHash('sha256').update(requirements).digest('hex').slice(0, 8),
-    category: category as any
+    category
   };
 }
 

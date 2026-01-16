@@ -114,7 +114,7 @@ import {
   DEFAULT_PIPELINE_CONFIG,
   VerificationTier
 } from '../pipeline/index.js';
-import { RoleComplianceResult, VerifierRole } from '../roles/types.js';
+import { RoleComplianceResult, RoleComplianceResultWithGuidance, VerifierRole } from '../roles/types.js';
 // [ENH: SAFEGUARDS] Quality safeguards imports
 import {
   initializeSafeguards,
@@ -137,6 +137,7 @@ import {
   shouldRecommendFullVerification,
   SafeguardsState,
   FileConfidence,
+  ConfidenceScore,
   DEFAULT_PERIODIC_CONFIG,
   DEFAULT_CONFIDENCE_CONFIG,
   DEFAULT_SAMPLING_CONFIG
@@ -1244,12 +1245,11 @@ export async function submitRound(
     nextRole,
     // Mediator intervention results
     mediatorInterventions: mediatorInterventions.length > 0 ? mediatorInterventions : undefined,
-    // Role compliance results
-    roleCompliance: {
-      ...roleCompliance,
+    // Role compliance results with next role guidance
+    roleCompliance: Object.assign({}, roleCompliance, {
       // Add next role guidance
-      nextRoleGuidelines: nextRolePrompt ? {
-        role: nextRole,
+      nextRoleGuidelines: nextRolePrompt && nextRole !== 'complete' ? {
+        role: nextRole as VerifierRole,
         // [ENH: CONCISE] Include concise mode info
         conciseMode: useConciseMode,
         round: nextRoundNumber,
@@ -1257,7 +1257,7 @@ export async function submitRound(
         mustDo: getRoleDefinition(nextRole as VerifierRole).mustDo.slice(0, 3),
         checklist: nextRolePrompt.checklist
       } : undefined
-    } as any,
+    }) as RoleComplianceResultWithGuidance,
     // [ENH: HIGH-01] Evidence validation results
     evidenceValidation: Object.keys(evidenceValidation).length > 0 ? evidenceValidation : undefined,
     // [ENH: HIGH-02] Stale issue detection
@@ -1991,13 +1991,14 @@ export async function updateConfidenceTool(
     } else if (fc.source === 'tiered' && fc.tierLevel) {
       confidence = calculateTierConfidence(fc.tierLevel as VerificationTier, []);
     } else {
+      const level: ConfidenceScore['level'] = fc.score >= 0.85 ? 'HIGH' : fc.score >= 0.7 ? 'MEDIUM' : fc.score >= 0.5 ? 'LOW' : 'UNRELIABLE';
       confidence = {
         score: fc.score,
-        level: fc.score >= 0.85 ? 'HIGH' : fc.score >= 0.7 ? 'MEDIUM' : fc.score >= 0.5 ? 'LOW' : 'UNRELIABLE',
+        level,
         factors: { methodBase: fc.score, freshness: 1, contextMatch: 1, coverage: 1, historicalAccuracy: 0.9 },
         warnings: [],
         calculatedAt: new Date().toISOString()
-      } as any;
+      } satisfies ConfidenceScore;
     }
 
     return {
@@ -2039,8 +2040,8 @@ export async function recordSamplingResultTool(
     return { success: false, message: 'Safeguards or sampling not initialized' };
   }
 
-  // Create issue-like objects for recording
-  const issues = args.severities.map((sev, i) => ({
+  // Create issue objects for recording (satisfies Issue interface)
+  const issues: Issue[] = args.severities.map((sev, i) => ({
     id: `sampled-${i}`,
     severity: sev,
     category: 'CORRECTNESS' as const,
@@ -2048,10 +2049,12 @@ export async function recordSamplingResultTool(
     location: args.filePath,
     description: '',
     evidence: '',
-    status: 'RAISED' as const
+    status: 'RAISED' as const,
+    raisedBy: 'verifier' as const,
+    raisedInRound: 0
   }));
 
-  recordSamplingResult(state.sampling.tracker, args.filePath, issues as any);
+  recordSamplingResult(state.sampling.tracker, args.filePath, issues);
   const stats = getSamplingStats(state.sampling.tracker);
   const recommendation = shouldRecommendFullVerification(state.sampling.tracker);
 
@@ -2174,7 +2177,7 @@ VERIFICATION OBJECTIVES:
 
   return {
     sessionId: session.id,
-    status: 're-verifying' as any,
+    status: 're-verifying',
     context: {
       target: previousSession.target,
       filesCollected: updatedSession?.context.files.size || 0,
