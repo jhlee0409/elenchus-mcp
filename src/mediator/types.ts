@@ -52,6 +52,8 @@ export interface ClassInfo {
 export interface DependencyGraph {
   nodes: Map<string, DependencyNode>;
   edges: DependencyEdge[];
+  // [ENH: ALGO] Adjacency list for O(1) outgoing edge lookup
+  outgoingEdges: Map<string, DependencyEdge[]>;
   reverseEdges: Map<string, string[]>;  // path -> files that import this
 }
 

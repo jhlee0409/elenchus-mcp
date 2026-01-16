@@ -425,6 +425,7 @@ export async function rollbackToCheckpoint(
  * [ENH: CRIT-03] Include HIGH severity in convergence check
  * [ENH: HIGH-05] Add category coverage to convergence
  * [ENH: LIFECYCLE] Add issue stabilization check
+ * [ENH: ALGO] Single-pass aggregation - O(n) instead of O(5n) for issue counts
  */
 export function checkConvergence(session: Session): ConvergenceStatus {
   const categories: IssueCategory[] = [
@@ -439,40 +440,63 @@ export function checkConvergence(session: Session): ConvergenceStatus {
     PERFORMANCE: 4
   };
 
-  // Count issues by category
-  const categoryCoverage: Record<IssueCategory, { checked: number; total: number }> =
-    {} as any;
+  // =============================================================================
+  // [ENH: ALGO] Single-pass aggregation - compute all counts in one iteration
+  // Reduces from 5+ iterations to 1 iteration over issues array
+  // =============================================================================
 
-  for (const cat of categories) {
-    const checked = session.issues.filter(i => i.category === cat).length;
-    categoryCoverage[cat] = { checked, total: categoryTotals[cat] };
+  const categoryCounts: Record<IssueCategory, number> = {
+    SECURITY: 0, CORRECTNESS: 0, RELIABILITY: 0, MAINTAINABILITY: 0, PERFORMANCE: 0
+  };
+
+  let unresolvedIssues = 0;
+  let criticalUnresolved = 0;
+  let highUnresolved = 0;
+  let dismissedCount = 0;
+  let mergedCount = 0;
+  let recentTransitions = 0;
+
+  const inactiveStatuses: IssueStatus[] = ['RESOLVED', 'DISMISSED', 'MERGED'];
+  const transitionCutoff = session.currentRound - 1;
+
+  // Single pass through all issues
+  for (const issue of session.issues) {
+    // Count by category
+    categoryCounts[issue.category]++;
+
+    // Count by status
+    if (issue.status === 'DISMISSED') {
+      dismissedCount++;
+    } else if (issue.status === 'MERGED') {
+      mergedCount++;
+    }
+
+    // Count active (unresolved) issues and their severities
+    if (!inactiveStatuses.includes(issue.status)) {
+      unresolvedIssues++;
+      if (issue.severity === 'CRITICAL') criticalUnresolved++;
+      if (issue.severity === 'HIGH') highUnresolved++;
+    }
+
+    // Count recent transitions (sliding window)
+    if (issue.transitions) {
+      for (const t of issue.transitions) {
+        if (t.round >= transitionCutoff) {
+          recentTransitions++;
+        }
+      }
+    }
   }
 
-  // [ENH: LIFECYCLE] Count issues excluding dismissed/merged
-  const activeIssues = session.issues.filter(
-    i => !['RESOLVED', 'DISMISSED', 'MERGED'].includes(i.status)
-  );
+  // Build categoryCoverage from single-pass counts
+  const categoryCoverage: Record<IssueCategory, { checked: number; total: number }> =
+    {} as Record<IssueCategory, { checked: number; total: number }>;
 
-  const unresolvedIssues = activeIssues.length;
+  for (const cat of categories) {
+    categoryCoverage[cat] = { checked: categoryCounts[cat], total: categoryTotals[cat] };
+  }
 
-  const criticalUnresolved = activeIssues.filter(
-    i => i.severity === 'CRITICAL'
-  ).length;
-
-  // [ENH: CRIT-03] Count HIGH severity unresolved issues
-  const highUnresolved = activeIssues.filter(
-    i => i.severity === 'HIGH'
-  ).length;
-
-  // [ENH: LIFECYCLE] Count dismissed and merged issues
-  const dismissedCount = session.issues.filter(i => i.status === 'DISMISSED').length;
-  const mergedCount = session.issues.filter(i => i.status === 'MERGED').length;
-
-  // [ENH: LIFECYCLE] Check issue stabilization (no transitions in last 2 rounds)
-  const recentTransitions = session.issues
-    .flatMap(i => i.transitions || [])
-    .filter(t => t.round >= session.currentRound - 1)
-    .length;
+  // [ENH: LIFECYCLE] Issue stabilization check
   const issuesStabilized = recentTransitions === 0;
 
   // Count rounds without new issues
@@ -812,6 +836,7 @@ export function detectStaleIssues(session: Session, staleThreshold: number = 3):
 /**
  * Get issues summary
  * [ENH: LIFECYCLE] Updated to include new status types
+ * [ENH: ALGO] Single-pass aggregation - O(n) instead of O(2n)
  */
 export function getIssuesSummary(session: Session) {
   const bySeverity: Record<Severity, number> = {
@@ -832,9 +857,18 @@ export function getIssuesSummary(session: Session) {
     SPLIT: 0
   };
 
+  // [ENH: ALGO] Single pass - count severity, status, and active in one iteration
+  let activeIssues = 0;
+  const inactiveStatuses: IssueStatus[] = ['RESOLVED', 'DISMISSED', 'MERGED'];
+
   for (const issue of session.issues) {
     bySeverity[issue.severity]++;
     byStatus[issue.status]++;
+
+    // Count active issues in same pass
+    if (!inactiveStatuses.includes(issue.status)) {
+      activeIssues++;
+    }
   }
 
   return {
@@ -842,9 +876,7 @@ export function getIssuesSummary(session: Session) {
     bySeverity,
     byStatus,
     // [ENH: LIFECYCLE] Additional lifecycle stats
-    activeIssues: session.issues.filter(i =>
-      !['RESOLVED', 'DISMISSED', 'MERGED'].includes(i.status)
-    ).length
+    activeIssues
   };
 }
 

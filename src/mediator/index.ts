@@ -25,6 +25,7 @@ import {
   calculateFileImportance
 } from './analyzer.js';
 import { Session, Issue, IssueImpactAnalysis, ImpactedCode } from '../types/index.js';
+import { Deque } from '../utils/data-structures.js';
 
 /**
  * [FIX: MNT-01] Mediator configuration constants
@@ -916,15 +917,17 @@ function extractMentionedFiles(output: string): Map<string, number[]> {
 
 /**
  * Resolve import path
+ * [ENH: ALGO] Use outgoingEdges Map for O(k) lookup instead of O(E) filter
  */
 function findResolvedImport(
   graph: DependencyGraph,
   fromFile: string,
   importSource: string
 ): string | null {
-  const edge = graph.edges.find(
-    e => e.from === fromFile && e.to.includes(importSource.replace(/^\.\//, ''))
-  );
+  // [ENH: ALGO] Use outgoingEdges for O(k) lookup where k = edges from this file
+  const edges = graph.outgoingEdges.get(fromFile) || [];
+  const normalizedSource = importSource.replace(/^\.\//, '');
+  const edge = edges.find(e => e.to.includes(normalizedSource));
   return edge?.to || null;
 }
 
@@ -932,6 +935,7 @@ function findResolvedImport(
  * Calculate dependency depth
  * [FIX: COR-03] Added maxDepth parameter to prevent infinite loops
  * [FIX: MNT-01] Use MEDIATOR_CONFIG for default maxDepth
+ * [ENH: ALGO] Use Deque for O(1) dequeue instead of O(n) Array.shift()
  */
 function calculateDependencyDepth(
   graph: DependencyGraph,
@@ -940,10 +944,13 @@ function calculateDependencyDepth(
   maxDepth: number = MEDIATOR_CONFIG.DEFAULT_MAX_DEPTH
 ): number {
   const visited = new Set<string>();
-  const queue: Array<{ file: string; depth: number }> = [{ file: from, depth: 0 }];
+  // [ENH: ALGO] Use Deque for O(1) operations
+  const queue = new Deque<{ file: string; depth: number }>();
+  queue.pushBack({ file: from, depth: 0 });
 
-  while (queue.length > 0) {
-    const { file, depth } = queue.shift()!;
+  while (!queue.isEmpty()) {
+    const item = queue.popFront()!;
+    const { file, depth } = item;
 
     if (file === to) return depth;
     if (visited.has(file)) continue;
@@ -953,7 +960,7 @@ function calculateDependencyDepth(
 
     const dependents = graph.reverseEdges.get(file) || [];
     for (const dep of dependents) {
-      queue.push({ file: dep, depth: depth + 1 });
+      queue.pushBack({ file: dep, depth: depth + 1 });
     }
   }
 

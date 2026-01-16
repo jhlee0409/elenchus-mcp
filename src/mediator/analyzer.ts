@@ -13,6 +13,7 @@ import {
   FunctionInfo,
   ClassInfo
 } from './types.js';
+import { Deque } from '../utils/data-structures.js';
 
 // =============================================================================
 // Main Analysis Functions
@@ -55,6 +56,8 @@ export async function buildDependencyGraph(
 ): Promise<DependencyGraph> {
   const nodes = new Map<string, DependencyNode>();
   const edges: DependencyEdge[] = [];
+  // [ENH: ALGO] Adjacency list for O(1) outgoing edge lookup
+  const outgoingEdges = new Map<string, DependencyEdge[]>();
   const reverseEdges = new Map<string, string[]>();
 
   // 1. Analyze all files
@@ -78,6 +81,12 @@ export async function buildDependencyGraph(
         };
         edges.push(edge);
 
+        // [ENH: ALGO] Build outgoing edges adjacency list
+        if (!outgoingEdges.has(filePath)) {
+          outgoingEdges.set(filePath, []);
+        }
+        outgoingEdges.get(filePath)!.push(edge);
+
         // Reverse edge
         const existing = reverseEdges.get(resolvedPath) || [];
         existing.push(filePath);
@@ -86,7 +95,7 @@ export async function buildDependencyGraph(
     }
   }
 
-  return { nodes, edges, reverseEdges };
+  return { nodes, edges, outgoingEdges, reverseEdges };
 }
 
 // =============================================================================
@@ -447,6 +456,7 @@ function resolveImportPath(
 
 /**
  * Find files affected when a specific file changes
+ * [ENH: ALGO] Uses Deque for O(1) dequeue instead of O(n) Array.shift()
  */
 export function findAffectedFiles(
   changedFile: string,
@@ -454,12 +464,13 @@ export function findAffectedFiles(
   depth: number = 3
 ): string[] {
   const affected = new Set<string>();
-  const queue: Array<{ file: string; currentDepth: number }> = [
-    { file: changedFile, currentDepth: 0 }
-  ];
+  // [ENH: ALGO] Use Deque for O(1) operations instead of O(n) Array.shift()
+  const queue = new Deque<{ file: string; currentDepth: number }>();
+  queue.pushBack({ file: changedFile, currentDepth: 0 });
 
-  while (queue.length > 0) {
-    const { file, currentDepth } = queue.shift()!;
+  while (!queue.isEmpty()) {
+    const item = queue.popFront()!;
+    const { file, currentDepth } = item;
 
     if (currentDepth >= depth) continue;
 
@@ -467,7 +478,7 @@ export function findAffectedFiles(
     for (const dep of dependents) {
       if (!affected.has(dep)) {
         affected.add(dep);
-        queue.push({ file: dep, currentDepth: currentDepth + 1 });
+        queue.pushBack({ file: dep, currentDepth: currentDepth + 1 });
       }
     }
   }
@@ -477,6 +488,7 @@ export function findAffectedFiles(
 
 /**
  * Find dependency path between two files
+ * [ENH: ALGO] Uses Deque for O(1) dequeue and outgoingEdges for O(1) edge lookup
  */
 export function findDependencyPath(
   from: string,
@@ -484,24 +496,23 @@ export function findDependencyPath(
   graph: DependencyGraph
 ): string[] | null {
   const visited = new Set<string>();
-  const queue: Array<{ file: string; path: string[] }> = [
-    { file: from, path: [from] }
-  ];
+  // [ENH: ALGO] Use Deque for O(1) operations
+  const queue = new Deque<{ file: string; path: string[] }>();
+  queue.pushBack({ file: from, path: [from] });
 
-  while (queue.length > 0) {
-    const { file, path: currentPath } = queue.shift()!;
+  while (!queue.isEmpty()) {
+    const item = queue.popFront()!;
+    const { file, path: currentPath } = item;
 
     if (file === to) return currentPath;
     if (visited.has(file)) continue;
     visited.add(file);
 
-    const node = graph.nodes.get(file);
-    if (!node) continue;
-
-    for (const imp of node.imports) {
-      const resolved = graph.edges.find(e => e.from === file)?.to;
-      if (resolved && !visited.has(resolved)) {
-        queue.push({ file: resolved, path: [...currentPath, resolved] });
+    // [ENH: ALGO] Use outgoingEdges Map for O(1) lookup instead of O(E) filter
+    const edges = graph.outgoingEdges.get(file) || [];
+    for (const edge of edges) {
+      if (!visited.has(edge.to)) {
+        queue.pushBack({ file: edge.to, path: [...currentPath, edge.to] });
       }
     }
   }
@@ -510,9 +521,74 @@ export function findDependencyPath(
 }
 
 /**
- * Detect circular dependencies
+ * Detect circular dependencies using Tarjan's SCC Algorithm
+ * [ENH: ALGO] O(V+E) instead of O(V*E) - finds all strongly connected components
+ * Each SCC with more than one node represents a cycle
  */
 export function detectCircularDependencies(graph: DependencyGraph): string[][] {
+  // Tarjan's SCC Algorithm
+  let index = 0;
+  const stack: string[] = [];
+  const onStack = new Set<string>();
+  const indices = new Map<string, number>();
+  const lowLinks = new Map<string, number>();
+  const sccs: string[][] = [];
+
+  function strongConnect(v: string): void {
+    // Set the depth index for v to the smallest unused index
+    indices.set(v, index);
+    lowLinks.set(v, index);
+    index++;
+    stack.push(v);
+    onStack.add(v);
+
+    // Consider successors of v using O(1) adjacency list lookup
+    const edges = graph.outgoingEdges.get(v) || [];
+    for (const edge of edges) {
+      const w = edge.to;
+      if (!indices.has(w)) {
+        // Successor w has not yet been visited; recurse on it
+        strongConnect(w);
+        lowLinks.set(v, Math.min(lowLinks.get(v)!, lowLinks.get(w)!));
+      } else if (onStack.has(w)) {
+        // Successor w is in stack and hence in the current SCC
+        // If w is not on stack, then (v, w) is an edge pointing to an SCC already found
+        lowLinks.set(v, Math.min(lowLinks.get(v)!, indices.get(w)!));
+      }
+    }
+
+    // If v is a root node, pop the stack and generate an SCC
+    if (lowLinks.get(v) === indices.get(v)) {
+      const scc: string[] = [];
+      let w: string;
+      do {
+        w = stack.pop()!;
+        onStack.delete(w);
+        scc.push(w);
+      } while (w !== v);
+
+      // Only include SCCs with more than one node (actual cycles)
+      if (scc.length > 1) {
+        sccs.push(scc);
+      }
+    }
+  }
+
+  // Visit all nodes
+  for (const v of graph.nodes.keys()) {
+    if (!indices.has(v)) {
+      strongConnect(v);
+    }
+  }
+
+  return sccs;
+}
+
+/**
+ * [ENH: ALGO] Legacy cycle detection - kept for compatibility
+ * Use detectCircularDependencies (Tarjan's) for better performance
+ */
+export function detectCircularDependenciesLegacy(graph: DependencyGraph): string[][] {
   const cycles: string[][] = [];
   const visited = new Set<string>();
   const recursionStack = new Set<string>();
@@ -528,7 +604,8 @@ export function detectCircularDependencies(graph: DependencyGraph): string[][] {
     visited.add(node);
     recursionStack.add(node);
 
-    const edges = graph.edges.filter(e => e.from === node);
+    // [ENH: ALGO] Use outgoingEdges for O(1) lookup
+    const edges = graph.outgoingEdges.get(node) || [];
     for (const edge of edges) {
       dfs(edge.to, [...path, edge.to]);
     }
