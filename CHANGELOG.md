@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-01-17
+
+### Changed
+- **README Rewrite** - Complete rewrite following MCP best practices
+  - Added Security section with security model documentation
+  - Added Troubleshooting section with common issues and solutions
+  - Added Configuration section with environment variables
+  - Improved tool documentation format (Inputs/Returns/Example)
+  - Added badges (Node.js, TypeScript, MCP Compatible)
+  - Use collapsible sections for better readability
+  - Removed unnecessary npm install guidance (npx only)
+- **Korean README** - Updated to match English version
+
+### Refactored
+- Extracted `session-helpers.ts` for better code organization
+- Extracted `result-types.ts` for consistent error handling
+- Extracted `output-schemas.ts` for MCP output validation
+- Centralized configuration in `config/constants.ts`
+
+### Fixed
+- Storage paths now client-agnostic (`~/.elenchus/` instead of `~/.claude/elenchus/`)
+
 ## [1.0.0] - 2025-01-16
 
 ### Added
@@ -52,4 +74,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full API documentation for all tools
 - Installation guides (npm, npx, source)
 
-[1.0.0]: https://github.com/jhlee0409/claude-plugins/releases/tag/elenchus-mcp-v1.0.0
+[1.1.0]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.1.0
+[1.0.0]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.0.0
