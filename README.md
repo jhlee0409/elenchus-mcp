@@ -520,6 +520,46 @@ Start re-verification of resolved issues.
 }
 ```
 
+### Automatic Verification (MCP Sampling)
+
+#### `elenchus_auto_verify`
+
+Run automatic verification loop using MCP Sampling. The server autonomously orchestrates Verifier↔Critic rounds without manual intervention.
+
+> **Requires**: MCP client with Sampling capability support
+
+```typescript
+{
+  target: string,              // Target path to verify
+  requirements: string,        // Verification requirements
+  workingDir: string,          // Working directory
+  config?: {
+    maxRounds?: number,        // Max rounds (default: 10)
+    maxTokens?: number,        // Max tokens per request (default: 4000)
+    stopOnCritical?: boolean,  // Stop on CRITICAL issue (default: false)
+    minRounds?: number,        // Min rounds before convergence (default: 2)
+    enableProgress?: boolean,  // Stream progress updates (default: true)
+    modelHint?: "fast" | "balanced" | "thorough",
+    includePreAnalysis?: boolean,  // Include pre-analysis (default: true)
+    autoConsolidate?: boolean      // Auto-consolidate issues (default: true)
+  }
+}
+```
+
+**Returns:** Session ID, final status, all issues, and optional consolidated fix plan.
+
+#### `elenchus_get_auto_loop_status`
+
+Query the current status of an automatic verification loop.
+
+```typescript
+{
+  sessionId: string           // Session ID to query
+}
+```
+
+**Returns:** Current round, status, issues found so far, convergence info.
+
 ---
 
 ## MCP Resources
@@ -548,6 +588,7 @@ Read elenchus://sessions/2026-01-17_src-auth_abc123
 | `/mcp__elenchus__apply` | Apply fixes with verification |
 | `/mcp__elenchus__complete` | Full pipeline until zero issues |
 | `/mcp__elenchus__cross-verify` | Adversarial cross-verification |
+| `/mcp__elenchus__auto-verify` | **Automatic** verification using MCP Sampling |
 
 ---
 
@@ -573,6 +614,79 @@ elenchus_start_session({
   }
 })
 ```
+
+---
+
+## Automatic Verification (MCP Sampling)
+
+Elenchus supports **fully automatic verification** using MCP Sampling capability. The server autonomously orchestrates the Verifier↔Critic debate loop without any manual intervention.
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   AUTOMATIC VERIFICATION                     │
+├─────────────────────────────────────────────────────────────┤
+│  1. Client calls elenchus_auto_verify                       │
+│  2. Server creates session and context                      │
+│  3. Server requests Verifier completion via MCP Sampling    │
+│  4. Server parses response, extracts issues                 │
+│  5. Server requests Critic completion via MCP Sampling      │
+│  6. Server parses response, updates issue statuses          │
+│  7. Repeat until convergence or max rounds                  │
+│  8. Return final result with all issues and fix plan        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Client Requirements
+
+| Capability | Required | Notes |
+|------------|----------|-------|
+| MCP Sampling | **Yes** | Server-initiated LLM requests |
+| createMessage | **Yes** | Part of Sampling capability |
+
+**Supported Clients:**
+- Claude Code (CLI) - ✅ Full support
+- Claude Desktop - ✅ Full support
+- Other clients - Check MCP Sampling support
+
+### Usage
+
+```typescript
+// Start automatic verification
+elenchus_auto_verify({
+  target: "src/auth",
+  requirements: "Security audit for authentication module",
+  workingDir: "/path/to/project",
+  config: {
+    maxRounds: 10,
+    modelHint: "thorough",    // fast | balanced | thorough
+    autoConsolidate: true     // Generate fix plan at end
+  }
+})
+```
+
+### Configuration Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `maxRounds` | 10 | Maximum rounds before stopping |
+| `maxTokens` | 4000 | Max tokens per LLM request |
+| `stopOnCritical` | false | Stop immediately on CRITICAL issue |
+| `minRounds` | 2 | Minimum rounds before convergence allowed |
+| `enableProgress` | true | Stream progress events |
+| `modelHint` | - | Hint for model selection (client decides) |
+| `includePreAnalysis` | true | Include static analysis in first prompt |
+| `autoConsolidate` | true | Generate prioritized fix plan at end |
+
+### Comparison: Manual vs Automatic
+
+| Aspect | Manual (`elenchus_submit_round`) | Automatic (`elenchus_auto_verify`) |
+|--------|----------------------------------|-----------------------------------|
+| Control | Full control over each round | Server-controlled |
+| Intervention | Can modify between rounds | No intervention |
+| Client Work | Parse prompts, call LLM, format response | Single tool call |
+| Best For | Custom workflows, debugging | Standard verification |
 
 ---
 
