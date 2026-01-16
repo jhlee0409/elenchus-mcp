@@ -123,8 +123,8 @@ claude mcp get elenchus  # 상태 확인
 ### 소스에서 빌드 (개발용)
 
 ```bash
-git clone https://github.com/jhlee0409/claude-plugins.git
-cd claude-plugins/mcp-servers/elenchus
+git clone https://github.com/jhlee0409/elenchus-mcp.git
+cd elenchus-mcp
 npm install && npm run build
 
 # 클라이언트에 추가:
@@ -358,6 +358,60 @@ rm -rf ~/.claude/elenchus/sessions/2024-01-15_*
 
 ## 주요 기능
 
+### 의도 기반 엣지 케이스 검증
+
+Elenchus는 하드코딩된 키워드 매칭 대신 **의도 기반 검증**을 사용합니다. LLM의 시맨틱 이해 능력을 활용하여 더 유연하고 철저한 검증이 가능합니다.
+
+**9개의 개념적 엣지 케이스 카테고리:**
+
+| # | 카테고리 | 생각할 질문 |
+|---|----------|------------|
+| 1 | 코드 레벨 | 입력이 null, 빈 값, 경계값이면? |
+| 2 | 사용자 행동 | 사용자가 더블클릭, 새로고침, 동시 세션을 사용하면? |
+| 3 | 외부 의존성 | 외부 서비스가 실패, 타임아웃, 예상치 못한 데이터를 반환하면? |
+| 4 | 비즈니스 로직 | 권한이 변경되거나 상태 전이가 충돌하면? |
+| 5 | 데이터 상태 | 데이터가 레거시, 손상, 예상치 못한 형식이면? |
+| 6 | 환경 | 설정이 드리프트하거나 리소스가 제한되면? |
+| 7 | 스케일 | 트래픽이 100배이거나 데이터가 방대하면? |
+| 8 | 보안 | 입력이 유효성 검사를 우회하거나 세션이 공격받으면? |
+| 9 | 사이드 이펙트 | 작업 중 상태가 변경되거나 트랜잭션이 부분 실패하면? |
+
+기반: OWASP Testing Guide, Netflix Chaos Engineering, Google DiRT.
+
+### 자동 영향 분석
+
+이슈가 발견되면 Elenchus가 자동으로 영향 정보를 분석하고 첨부합니다:
+
+- **Callers**: 영향받는 코드를 호출하는 함수
+- **Dependencies**: 영향받는 영역이 의존하는 코드
+- **Related Tests**: 영향받는 코드를 커버하는 테스트 파일
+- **Cascade Depth**: 영향의 깊이 (몇 단계까지)
+- **Risk Level**: LOW / MEDIUM / HIGH / CRITICAL
+
+고위험 이슈는 영향받는 파일이 검토되었는지 수렴 검증을 트리거합니다.
+
+### 이슈 라이프사이클 관리
+
+이슈는 여러 상태를 거칠 수 있습니다:
+
+| 상태 | 설명 |
+|------|------|
+| RAISED | 최초 발견 |
+| CHALLENGED | 논쟁 중 |
+| RESOLVED | 수정 및 검증 완료 |
+| DISMISSED | 무효화 (오탐) |
+| MERGED | 다른 이슈와 병합 |
+| SPLIT | 여러 이슈로 분할 |
+
+### 선제적 중재자
+
+`elenchus_get_context` 도구가 선제적 가이던스를 제공합니다:
+
+- **Focus Areas**: 다음에 검토할 영역
+- **Unreviewed Files**: 아직 검토되지 않은 파일
+- **Impact Recommendations**: 검증할 고위험 영역
+- **Edge Case Gaps**: 누락된 엣지 케이스 커버리지
+
 ### 계층화된 컨텍스트
 
 ```
@@ -400,11 +454,19 @@ elenchus_ripple_effect({
 
 ### 수렴 감지
 
+강화된 수렴 조건:
+
 ```typescript
 isConverged =
   criticalUnresolved === 0 &&
+  highUnresolved === 0 &&
   roundsWithoutNewIssues >= 2 &&
-  currentRound >= 2
+  currentRound >= 3 &&
+  allCategoriesExamined &&      // 5개 카테고리 전부 검토
+  issuesStabilized &&           // 최근 전이 없음
+  hasEdgeCaseCoverage &&        // 엣지 케이스 문서화
+  hasNegativeAssertions &&      // 클린 영역 명시
+  hasHighRiskCoverage           // 영향받는 파일 검토 완료
 ```
 
 ### 역할 강제

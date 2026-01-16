@@ -123,8 +123,8 @@ Go to **Settings > MCP > Add new global MCP Server**, then add:
 ### From Source (Development)
 
 ```bash
-git clone https://github.com/jhlee0409/claude-plugins.git
-cd claude-plugins/mcp-servers/elenchus
+git clone https://github.com/jhlee0409/elenchus-mcp.git
+cd elenchus-mcp
 npm install && npm run build
 
 # Then add to your client with:
@@ -358,6 +358,60 @@ rm -rf ~/.claude/elenchus/sessions/2024-01-15_*
 
 ## Key Features
 
+### Intent-Based Edge Case Validation
+
+Elenchus uses **intent-based validation** instead of hardcoded keyword matching. This leverages LLM's semantic understanding for more flexible and thorough verification.
+
+**9 Conceptual Edge Case Categories:**
+
+| # | Category | Thinking Question |
+|---|----------|-------------------|
+| 1 | Code-level | What if inputs are null, empty, at boundary values? |
+| 2 | User Behavior | What if users double-click, refresh, or have concurrent sessions? |
+| 3 | External Dependencies | What if external services fail, timeout, or return unexpected data? |
+| 4 | Business Logic | What if permissions change or state transitions conflict? |
+| 5 | Data State | What if data is legacy, corrupted, or in unexpected format? |
+| 6 | Environment | What if config drifts or resources are limited? |
+| 7 | Scale | What if traffic is 100x normal or data is massive? |
+| 8 | Security | What if inputs bypass validation or sessions are attacked? |
+| 9 | Side Effects | What if state changes mid-operation or transactions partially fail? |
+
+Based on: OWASP Testing Guide, Netflix Chaos Engineering, Google DiRT.
+
+### Automatic Impact Analysis
+
+When issues are raised, Elenchus automatically analyzes and attaches impact information:
+
+- **Callers**: Functions that call the affected code
+- **Dependencies**: Code the affected area depends on
+- **Related Tests**: Test files that cover the affected code
+- **Cascade Depth**: How many levels of impact
+- **Risk Level**: LOW / MEDIUM / HIGH / CRITICAL
+
+High-risk issues trigger convergence validation to ensure impacted files are reviewed.
+
+### Issue Lifecycle Management
+
+Issues can transition through multiple states:
+
+| Status | Description |
+|--------|-------------|
+| RAISED | Initially discovered |
+| CHALLENGED | Being debated |
+| RESOLVED | Fixed and verified |
+| DISMISSED | Invalidated (false positive) |
+| MERGED | Combined with another issue |
+| SPLIT | Divided into multiple issues |
+
+### Proactive Mediator
+
+The `elenchus_get_context` tool provides proactive guidance:
+
+- **Focus Areas**: What to examine next
+- **Unreviewed Files**: Files not yet checked
+- **Impact Recommendations**: High-risk areas to verify
+- **Edge Case Gaps**: Missing edge case coverage
+
 ### Layered Context
 
 ```
@@ -400,11 +454,19 @@ elenchus_ripple_effect({
 
 ### Convergence Detection
 
+Enhanced convergence criteria:
+
 ```typescript
 isConverged =
   criticalUnresolved === 0 &&
+  highUnresolved === 0 &&
   roundsWithoutNewIssues >= 2 &&
-  currentRound >= 2
+  currentRound >= 3 &&
+  allCategoriesExamined &&      // All 5 categories checked
+  issuesStabilized &&           // No recent transitions
+  hasEdgeCaseCoverage &&        // Edge cases documented
+  hasNegativeAssertions &&      // Clean areas stated
+  hasHighRiskCoverage           // Impact files reviewed
 ```
 
 ### Role Enforcement
