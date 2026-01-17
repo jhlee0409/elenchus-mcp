@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-01-17
+
+### Removed
+- **MCP Sampling Auto-Verification** - Removed automatic verification features
+  - Removed `elenchus_auto_verify` tool
+  - Removed `elenchus_get_auto_loop_status` tool
+  - Removed `auto-verify` prompt
+  - Removed `src/sampling/` module entirely
+  - Removed MCP Sampling capability declaration
+
+### Why Removed
+- MCP Sampling is not universally supported across clients
+- For interactive use (Claude Code/Desktop), the LLM client itself can directly perform Verifier/Critic roles using existing prompts (`/verify`, `/complete`)
+- The prompt-based workflow achieves the same result without Sampling dependency
+- For CI/CD automation, a dedicated CLI tool would be more appropriate than MCP Sampling
+
+### Migration Guide
+Instead of `elenchus_auto_verify`, use the manual workflow:
+1. Start session: `elenchus_start_session(...)`
+2. Submit Verifier round: `elenchus_submit_round({ role: "verifier", ... })`
+3. Submit Critic round: `elenchus_submit_round({ role: "critic", ... })`
+4. Repeat until convergence
+5. End session: `elenchus_end_session(...)`
+
+Or use the `/verify` or `/complete` prompts which guide this workflow automatically.
+
+---
+
 ## [1.1.2] - 2026-01-17
 
 ### Fixed
@@ -106,5 +134,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full API documentation for all tools
 - Installation guides (npm, npx, source)
 
+[1.1.3]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.1.3
+[1.1.2]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.1.2
+[1.1.1]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.1.1
 [1.1.0]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.1.0
 [1.0.0]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.0.0

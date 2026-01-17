@@ -25,7 +25,6 @@
 - [MCP Resources](#mcp-resources)
 - [MCP Prompts](#mcp-prompts-slash-commands)
 - [Verification Modes](#verification-modes)
-- [Automatic Verification](#automatic-verification-mcp-sampling)
 - [Issue Lifecycle](#issue-lifecycle)
 - [Convergence Detection](#convergence-detection)
 - [Token Optimization](#token-optimization)
@@ -399,7 +398,6 @@ Read elenchus://sessions/2026-01-17_src-auth_abc123
 | `apply` | Apply fixes with verification |
 | `complete` | Full pipeline until zero issues |
 | `cross-verify` | Adversarial cross-verification |
-| `auto-verify` | **Automatic** verification using MCP Sampling |
 
 > Invocation format varies by client. Check your MCP client's documentation.
 
@@ -427,88 +425,6 @@ elenchus_start_session({
   }
 })
 ```
-
----
-
-## Automatic Verification (MCP Sampling)
-
-Elenchus supports **fully automatic verification** using MCP Sampling capability. The server autonomously orchestrates the Verifier↔Critic debate loop without manual intervention.
-
-### How It Works
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                   AUTOMATIC VERIFICATION                     │
-├─────────────────────────────────────────────────────────────┤
-│  1. Client calls elenchus_auto_verify                       │
-│  2. Server creates session and context                      │
-│  3. Server requests Verifier completion via MCP Sampling    │
-│  4. Server parses response, extracts issues                 │
-│  5. Server requests Critic completion via MCP Sampling      │
-│  6. Server parses response, updates issue statuses          │
-│  7. Repeat until convergence or max rounds                  │
-│  8. Return final result with all issues and fix plan        │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Client Requirements
-
-| Capability | Required | Notes |
-|------------|----------|-------|
-| MCP Sampling | **Yes** | Server-initiated LLM requests |
-| createMessage | **Yes** | Part of Sampling capability |
-
-**Client Support:**
-- MCP Sampling capability required
-- Check your client's documentation for support
-
-### Tool: `elenchus_auto_verify`
-
-**Inputs:**
-- `target` (string, required): Target path to verify
-- `requirements` (string, required): Verification requirements
-- `workingDir` (string, required): Working directory
-- `config` (object, optional):
-  - `maxRounds`: Maximum rounds (default: 10)
-  - `maxTokens`: Max tokens per request (default: 4000)
-  - `stopOnCritical`: Stop on CRITICAL issue (default: false)
-  - `minRounds`: Min rounds before convergence (default: 2)
-  - `enableProgress`: Stream progress updates (default: true)
-  - `modelHint`: `"fast"` | `"balanced"` | `"thorough"`
-  - `includePreAnalysis`: Include static analysis (default: true)
-  - `autoConsolidate`: Generate fix plan (default: true)
-
-**Returns:** Session ID, final status, all issues, and optional consolidated fix plan.
-
-**Example:**
-```typescript
-elenchus_auto_verify({
-  target: "src/auth",
-  requirements: "Security audit for authentication module",
-  workingDir: "/path/to/project",
-  config: {
-    maxRounds: 10,
-    modelHint: "thorough",
-    autoConsolidate: true
-  }
-})
-```
-
-### Tool: `elenchus_get_auto_loop_status`
-
-**Inputs:**
-- `sessionId` (string, required): Session ID to query
-
-**Returns:** Current round, status, issues found so far, convergence info.
-
-### Comparison: Manual vs Automatic
-
-| Aspect | Manual (`elenchus_submit_round`) | Automatic (`elenchus_auto_verify`) |
-|--------|----------------------------------|-----------------------------------|
-| Control | Full control over each round | Server-controlled |
-| Intervention | Can modify between rounds | No intervention |
-| Client Work | Parse prompts, call LLM, format response | Single tool call |
-| Best For | Custom workflows, debugging | Standard verification |
 
 ---
 
@@ -811,21 +727,6 @@ Please report security vulnerabilities via [GitHub Security Advisories](https://
    ```
 2. Sessions may have been cleaned up - start a new session
 3. Verify session ID is correct (check for typos)
-
-</details>
-
-<details>
-<summary><strong>MCP Sampling not supported</strong></summary>
-
-**Symptom:** `elenchus_auto_verify` fails with sampling error.
-
-**Solutions:**
-1. Check if your MCP client supports MCP Sampling capability
-2. Use manual verification instead:
-   ```typescript
-   elenchus_start_session(...)
-   elenchus_submit_round(...)
-   ```
 
 </details>
 

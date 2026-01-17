@@ -151,15 +151,6 @@ import {
   changeSeverity,
   IssueTransitionResult
 } from '../lifecycle/index.js';
-// [ENH: SAMPLING] Auto-loop with MCP Sampling
-import {
-  runAutoLoop,
-  getAutoLoopState,
-  onAutoLoopEvent,
-  AutoLoopConfig,
-  AutoLoopResult,
-  DEFAULT_AUTO_LOOP_CONFIG
-} from '../sampling/index.js';
 
 // =============================================================================
 // Tool Schemas
@@ -235,30 +226,6 @@ export const SafeguardsConfigSchema = z.object({
     strategy: z.enum(['UNIFORM', 'RISK_WEIGHTED', 'CHANGE_WEIGHTED', 'DEPENDENCY_WEIGHTED']).optional().default('RISK_WEIGHTED').describe('Sampling strategy')
   }).optional()
 }).optional();
-
-// [ENH: SAMPLING] Auto-loop configuration schema
-export const AutoLoopConfigSchema = z.object({
-  maxRounds: z.number().optional().default(10).describe('Maximum rounds before forcibly stopping'),
-  maxTokens: z.number().optional().default(4000).describe('Maximum tokens per LLM request'),
-  stopOnCritical: z.boolean().optional().default(false).describe('Stop on first CRITICAL issue found'),
-  minRounds: z.number().optional().default(2).describe('Minimum rounds before allowing convergence'),
-  enableProgress: z.boolean().optional().default(true).describe('Enable streaming progress updates'),
-  modelHint: z.enum(['fast', 'balanced', 'thorough']).optional().describe('Model hint for client'),
-  includePreAnalysis: z.boolean().optional().default(true).describe('Include pre-analysis findings in first prompt'),
-  autoConsolidate: z.boolean().optional().default(true).describe('Auto-consolidate issues at end')
-}).optional();
-
-// [ENH: SAMPLING] Auto-verification schema
-export const AutoVerifySchema = z.object({
-  target: z.string().describe('Target path to verify (file or directory)'),
-  requirements: z.string().describe('User verification requirements'),
-  workingDir: z.string().describe('Working directory for relative paths'),
-  config: AutoLoopConfigSchema.describe('Auto-loop configuration')
-});
-
-export const GetAutoLoopStatusSchema = z.object({
-  sessionId: z.string().describe('Session ID to get auto-loop status for')
-});
 
 export const StartSessionSchema = z.object({
   target: z.string().describe('Target path to verify (file or directory)'),
@@ -1460,93 +1427,6 @@ export async function getSessions(): Promise<string[]> {
 // =============================================================================
 // [ENH: SAMPLING] Auto-Loop Tools
 // =============================================================================
-
-// Server instance for sampling (set by initAutoLoopServer)
-let autoLoopServer: any = null;
-
-/**
- * Initialize auto-loop with server instance
- * Must be called from index.ts after server creation
- */
-export function initAutoLoopServer(server: any): void {
-  autoLoopServer = server;
-}
-
-/**
- * Run automatic verification loop using MCP Sampling
- *
- * This tool starts an automated Verifier↔Critic loop where the server
- * autonomously orchestrates verification rounds by requesting LLM completions
- * from the connected client via MCP Sampling.
- *
- * The loop continues until:
- * - Convergence criteria are met
- * - Maximum rounds reached
- * - CRITICAL issue found (if stopOnCritical enabled)
- *
- * @returns AutoLoopResult with session ID, status, issues, and optional consolidated plan
- */
-export async function autoVerify(
-  args: z.infer<typeof AutoVerifySchema>
-): Promise<AutoLoopResult | { error: string }> {
-  if (!autoLoopServer) {
-    return {
-      error: 'Auto-loop server not initialized. Sampling capability may not be available.'
-    };
-  }
-
-  // Check if client supports sampling
-  try {
-    const result = await runAutoLoop(
-      autoLoopServer,
-      args.target,
-      args.requirements,
-      args.workingDir,
-      args.config || {}
-    );
-    return result;
-  } catch (error) {
-    return {
-      error: error instanceof Error ? error.message : 'Unknown error during auto-verification'
-    };
-  }
-}
-
-/**
- * Get status of an auto-loop session
- */
-export async function getAutoLoopStatus(
-  args: z.infer<typeof GetAutoLoopStatusSchema>
-): Promise<{
-  found: boolean;
-  state?: {
-    sessionId: string;
-    status: string;
-    currentRound: number;
-    currentRole: string;
-    totalIssues: number;
-    duration: number;
-  };
-}> {
-  const state = getAutoLoopState(args.sessionId);
-  if (!state) {
-    return { found: false };
-  }
-
-  return {
-    found: true,
-    state: {
-      sessionId: state.sessionId,
-      status: state.status,
-      currentRound: state.currentRound,
-      currentRole: state.currentRole,
-      totalIssues: state.issues.length,
-      duration: (state.endTime || Date.now()) - state.startTime
-    }
-  };
-}
-
-// =============================================================================
 // [ENH: DIFF] Differential Analysis Tools
 // =============================================================================
 
@@ -2528,16 +2408,5 @@ export const tools = {
     description: 'Check if session convergence is allowed based on quality safeguards.',
     schema: CheckConvergenceAllowedSchema,
     handler: checkConvergenceAllowedTool
-  },
-  // [ENH: SAMPLING] Auto-loop tools
-  elenchus_auto_verify: {
-    description: 'Run automatic verification loop using MCP Sampling. The server autonomously orchestrates Verifier↔Critic rounds by requesting LLM completions from the client. Returns when converged or max rounds reached.',
-    schema: AutoVerifySchema,
-    handler: autoVerify
-  },
-  elenchus_get_auto_loop_status: {
-    description: 'Get status of an auto-loop verification session including current round, role, and issues found.',
-    schema: GetAutoLoopStatusSchema,
-    handler: getAutoLoopStatus
   }
 };

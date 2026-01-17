@@ -25,7 +25,6 @@
 - [MCP 리소스](#mcp-리소스)
 - [MCP 프롬프트](#mcp-프롬프트-슬래시-커맨드)
 - [검증 모드](#검증-모드)
-- [자동 검증](#자동-검증-mcp-sampling)
 - [이슈 라이프사이클](#이슈-라이프사이클)
 - [수렴 감지](#수렴-감지)
 - [토큰 최적화](#토큰-최적화)
@@ -399,7 +398,6 @@ Read elenchus://sessions/2026-01-17_src-auth_abc123
 | `apply` | 검증과 함께 수정 적용 |
 | `complete` | 이슈 0까지 전체 파이프라인 |
 | `cross-verify` | 적대적 교차 검증 |
-| `auto-verify` | MCP Sampling을 이용한 **자동** 검증 |
 
 > 호출 형식은 클라이언트에 따라 다릅니다. MCP 클라이언트 문서를 참고하세요.
 
@@ -427,81 +425,6 @@ elenchus_start_session({
   }
 })
 ```
-
----
-
-## 자동 검증 (MCP Sampling)
-
-Elenchus는 MCP Sampling 기능을 사용하여 **완전 자동 검증**을 지원합니다. 서버가 수동 개입 없이 Verifier↔Critic 토론 루프를 자율적으로 조율합니다.
-
-### 작동 방식
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      자동 검증                                │
-├─────────────────────────────────────────────────────────────┤
-│  1. 클라이언트가 elenchus_auto_verify 호출                   │
-│  2. 서버가 세션과 컨텍스트 생성                              │
-│  3. 서버가 MCP Sampling으로 Verifier 완료 요청               │
-│  4. 서버가 응답 파싱, 이슈 추출                              │
-│  5. 서버가 MCP Sampling으로 Critic 완료 요청                 │
-│  6. 서버가 응답 파싱, 이슈 상태 업데이트                     │
-│  7. 수렴 또는 최대 라운드까지 반복                           │
-│  8. 모든 이슈와 수정 계획을 포함한 최종 결과 반환            │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### 클라이언트 요구사항
-
-| 기능 | 필수 | 비고 |
-|------|------|------|
-| MCP Sampling | **예** | 서버 주도 LLM 요청 |
-| createMessage | **예** | Sampling 기능의 일부 |
-
-**클라이언트 지원:**
-- MCP Sampling 기능 필요
-- 클라이언트 문서에서 지원 여부 확인
-
-### 도구: `elenchus_auto_verify`
-
-**입력:**
-- `target` (string, 필수): 검증 대상 경로
-- `requirements` (string, 필수): 검증 요구사항
-- `workingDir` (string, 필수): 작업 디렉토리
-- `config` (object, 선택):
-  - `maxRounds`: 최대 라운드 (기본: 10)
-  - `maxTokens`: 요청당 최대 토큰 (기본: 4000)
-  - `stopOnCritical`: CRITICAL 이슈 시 중단 (기본: false)
-  - `minRounds`: 수렴 전 최소 라운드 (기본: 2)
-  - `enableProgress`: 진행 상황 스트리밍 (기본: true)
-  - `modelHint`: `"fast"` | `"balanced"` | `"thorough"`
-  - `includePreAnalysis`: 정적 분석 포함 (기본: true)
-  - `autoConsolidate`: 수정 계획 생성 (기본: true)
-
-**반환:** 세션 ID, 최종 상태, 모든 이슈, 선택적 통합 수정 계획.
-
-**예시:**
-```typescript
-elenchus_auto_verify({
-  target: "src/auth",
-  requirements: "인증 모듈 보안 감사",
-  workingDir: "/path/to/project",
-  config: {
-    maxRounds: 10,
-    modelHint: "thorough",
-    autoConsolidate: true
-  }
-})
-```
-
-### 수동 vs 자동 비교
-
-| 측면 | 수동 (`elenchus_submit_round`) | 자동 (`elenchus_auto_verify`) |
-|------|-------------------------------|------------------------------|
-| 제어 | 각 라운드 완전 제어 | 서버 제어 |
-| 개입 | 라운드 간 수정 가능 | 개입 불가 |
-| 클라이언트 작업 | 프롬프트 파싱, LLM 호출, 응답 포맷 | 단일 도구 호출 |
-| 용도 | 커스텀 워크플로우, 디버깅 | 표준 검증 |
 
 ---
 
@@ -804,21 +727,6 @@ Elenchus는 다음을 필요로 합니다:
    ```
 2. 세션이 정리되었을 수 있음 - 새 세션 시작
 3. 세션 ID 오타 확인
-
-</details>
-
-<details>
-<summary><strong>MCP Sampling 미지원</strong></summary>
-
-**증상:** `elenchus_auto_verify`가 sampling 오류로 실패.
-
-**해결책:**
-1. MCP 클라이언트가 MCP Sampling을 지원하는지 확인
-2. 대신 수동 검증 사용:
-   ```typescript
-   elenchus_start_session(...)
-   elenchus_submit_round(...)
-   ```
 
 </details>
 
