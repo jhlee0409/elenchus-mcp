@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.3] - 2026-01-17
 
+### Added
+- **Claude Desktop Installation Guide** - Added setup instructions for Claude Desktop (macOS/Windows)
+- **Claude Code Installation Guide** - Added setup instructions for Claude Code CLI
+
+### Changed
+- **README Structure Improvements** - Streamlined documentation based on MCP ecosystem research
+  - Collapsed Issue Lifecycle section into `<details>` tag
+  - Collapsed Convergence Detection section into `<details>` tag
+  - Simplified table of contents (17 → 15 items)
+
 ### Removed
+- **Edge Case Categories Section** - Removed OWASP/Netflix/Google DiRT references (overly verbose)
 - **MCP Sampling Auto-Verification** - Removed automatic verification features
   - Removed `elenchus_auto_verify` tool
   - Removed `elenchus_get_auto_loop_status` tool
@@ -15,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed `src/sampling/` module entirely
   - Removed MCP Sampling capability declaration
 
-### Why Removed
+### Why MCP Sampling Removed
 - MCP Sampling is not universally supported across clients
 - For interactive use (Claude Code/Desktop), the LLM client itself can directly perform Verifier/Critic roles using existing prompts (`/verify`, `/complete`)
 - The prompt-based workflow achieves the same result without Sampling dependency
