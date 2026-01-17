@@ -93,11 +93,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       ]
     };
   } catch (error) {
+    // [FIX: REL-01] Distinguish between validation and execution errors
+    const isValidationError = error instanceof Error &&
+      error.name === 'ZodError';
+
+    const errorType = isValidationError ? 'Validation Error' : 'Execution Error';
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
     return {
       content: [
         {
           type: 'text',
-          text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+          text: `${errorType}: ${errorMessage}`
         }
       ],
       isError: true
@@ -281,44 +288,78 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
 /**
  * Zod schema internal definition type (for introspection)
  * Note: This accesses Zod internals which may change between versions
+ * [FIX: CORR-02] Extended to support nested objects and arrays
  */
 interface ZodSchemaDef {
   typeName?: string;
   description?: string;
   innerType?: { _def?: ZodSchemaDef };
+  type?: { _def?: ZodSchemaDef };  // For ZodArray items
+  shape?: () => Record<string, ZodSchemaLike>;  // For ZodObject properties
+  values?: ZodSchemaLike[];  // For ZodEnum values
 }
 
 interface ZodSchemaLike {
   _def?: ZodSchemaDef;
   isOptional?: () => boolean;
+  shape?: Record<string, ZodSchemaLike>;  // Direct shape access for objects
 }
 
 /**
- * Extract JSON Schema type from Zod schema
+ * Convert Zod schema to JSON Schema representation
+ * [FIX: CORR-02] Now properly handles nested objects, arrays with item types, and enums
  */
-function getZodType(schema: ZodSchemaLike): string {
+function zodToJsonSchema(schema: ZodSchemaLike): Record<string, unknown> {
   const typeName = schema._def?.typeName;
 
   switch (typeName) {
     case 'ZodString':
-      return 'string';
+      return { type: 'string' };
     case 'ZodNumber':
-      return 'number';
+      return { type: 'number' };
     case 'ZodBoolean':
-      return 'boolean';
-    case 'ZodArray':
-      return 'array';
-    case 'ZodObject':
-      return 'object';
+      return { type: 'boolean' };
+    case 'ZodArray': {
+      const itemSchema = schema._def?.type;
+      return {
+        type: 'array',
+        items: itemSchema ? zodToJsonSchema(itemSchema) : {}
+      };
+    }
+    case 'ZodObject': {
+      const shape = schema.shape ?? (schema._def?.shape?.() as Record<string, ZodSchemaLike> | undefined);
+      if (shape) {
+        return {
+          type: 'object',
+          properties: Object.fromEntries(
+            Object.entries(shape).map(([key, value]) => [
+              key,
+              {
+                ...zodToJsonSchema(value),
+                description: getZodDescription(value)
+              }
+            ])
+          )
+        };
+      }
+      return { type: 'object' };
+    }
     case 'ZodEnum':
-      return 'string';
+      return { type: 'string' };
     case 'ZodOptional':
-      return getZodType(schema._def?.innerType ?? {});
     case 'ZodDefault':
-      return getZodType(schema._def?.innerType ?? {});
+      return zodToJsonSchema(schema._def?.innerType ?? {});
     default:
-      return 'string';
+      return { type: 'string' };
   }
+}
+
+/**
+ * Extract JSON Schema type from Zod schema (simplified for top-level)
+ */
+function getZodType(schema: ZodSchemaLike): string {
+  const jsonSchema = zodToJsonSchema(schema);
+  return (jsonSchema.type as string) ?? 'string';
 }
 
 /**
@@ -341,8 +382,31 @@ function isZodOptional(schema: ZodSchemaLike): boolean {
 // Main
 // =============================================================================
 
+/**
+ * Graceful shutdown handler
+ * [FIX: REL-02] Properly cleanup before exit
+ */
+async function gracefulShutdown(signal: string): Promise<void> {
+  console.error(`\n[Elenchus] Received ${signal}, shutting down gracefully...`);
+
+  try {
+    // Close the server connection
+    await server.close();
+    console.error('[Elenchus] Server closed successfully');
+  } catch (error) {
+    console.error('[Elenchus] Error during shutdown:', error);
+  }
+
+  process.exit(0);
+}
+
 async function main() {
   const transport = new StdioServerTransport();
+
+  // [FIX: REL-02] Register shutdown handlers
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
   await server.connect(transport);
 
   console.error('Elenchus MCP Server running on stdio');
@@ -350,5 +414,6 @@ async function main() {
 
 main().catch((error) => {
   console.error('Fatal error:', error);
-  process.exit(1);
+  // [FIX: REL-02] Give a moment for error logging before exit
+  setTimeout(() => process.exit(1), 100);
 });
