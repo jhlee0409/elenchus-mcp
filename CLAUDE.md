@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Elenchus MCP Server is an adversarial code verification system using a Verifier-Critic loop. Named after Socrates' method of refutation (ἔλεγχος), it provides state management, context sharing, and orchestration for code verification loops via the Model Context Protocol (MCP).
+Elenchus MCP Server is an adversarial code verification system using a Verifier-Critic loop. Named after Socrates' method of refutation (ἔλεγχος), it orchestrates debate between Verifier and Critic agents via the Model Context Protocol (MCP).
 
-## Build & Development Commands
+## Build & Development
 
 ```bash
 npm run build      # Compile TypeScript to dist/
@@ -19,94 +19,91 @@ npm run inspector  # Launch MCP Inspector for debugging
 
 ### Core Flow
 
-1. **Session Start** (`startSession`) - Initializes verification with target files, builds dependency graph
-2. **Round Submission** (`submitRound`) - Verifier and Critic alternate submitting analysis
-3. **Convergence Check** - Automatic evaluation after each round
-4. **Session End** (`endSession`) - Final verdict (PASS/FAIL/CONDITIONAL)
+1. **Session Start** → Initializes verification, builds dependency graph
+2. **Round Submission** → Verifier and Critic alternate submitting analysis
+3. **Convergence Check** → Automatic evaluation after each round
+4. **Session End** → Final verdict (PASS/FAIL/CONDITIONAL)
 
 ### Key Modules
 
-**src/index.ts** - MCP server entry point, registers tools/resources/prompts handlers
+| Module | Purpose |
+|--------|---------|
+| `src/index.ts` | MCP server entry point, registers tools/resources/prompts |
+| `src/tools/` | All MCP tool implementations (session lifecycle, state management, analysis, role enforcement) |
+| `src/state/session.ts` | Session persistence at `~/.elenchus/sessions/`, convergence detection |
+| `src/state/context.ts` | File collection, pre-analysis for obvious issues |
+| `src/mediator/` | Dependency graph, circular detection, ripple effect analysis, interventions |
+| `src/roles/` | Verifier/Critic definitions, compliance validation, strict alternation |
+| `src/prompts/` | 5 MCP prompts: verify, consolidate, apply, complete, cross-verify |
+| `src/utils/data-structures.ts` | LRU Cache, Priority Queue, Trie for algorithm optimization |
 
-**src/tools/index.ts** - All MCP tool implementations:
-- Session lifecycle: `startSession`, `getContext`, `submitRound`, `endSession`
-- State management: `checkpoint`, `rollback`
-- Analysis: `rippleEffect`, `mediatorSummary`
-- Role enforcement: `getRolePrompt`, `roleSummary`, `updateRoleConfig`
-- [ENH: ONE-SHOT] Fix application: `applyFix` - Apply fixes within session, refresh context, trigger re-verify
+### Token Optimization Modules
 
-**src/state/session.ts** - Session persistence and convergence detection:
-- Sessions stored at `~/.elenchus/sessions/` (client-agnostic)
-- `checkConvergence()` - Intent-based convergence with 5 categories, edge case coverage, impact analysis
-- [ENH: ONE-SHOT] Supports `fast-track` and `single-pass` modes for faster convergence
+| Module | Purpose |
+|--------|---------|
+| `src/diff/` | Differential analysis (verify only changed files) |
+| `src/cache/` | Response caching with TTL |
+| `src/chunking/` | Split large files into function-level chunks |
+| `src/pipeline/` | Tiered verification (screen → focused → exhaustive) |
+| `src/safeguards/` | Quality safeguards, confidence scoring, sampling validation |
 
-**src/state/context.ts** - Context and pre-analysis:
-- [ENH: ONE-SHOT] `analyzeContextForIssues()` - Lightweight static analysis on initialization
-- Pre-identifies obvious issues (eval, innerHTML, hardcoded secrets, etc.) before LLM verification
+### Verification Modes
 
-**src/mediator/** - Dependency analysis and proactive intervention:
-- Builds import/export dependency graph
-- Detects circular dependencies
-- Analyzes ripple effects of code changes
-- Triggers interventions (CONTEXT_EXPAND, LOOP_BREAK, SOFT_CORRECT)
-
-**src/roles/** - Verifier/Critic role definitions and enforcement:
-- Strict alternation: Verifier → Critic → Verifier → ...
-- Compliance validation with mustDo/mustNotDo rules
-- Optional strict mode that rejects non-compliant rounds
-
-**src/prompts/** - MCP prompts (slash commands):
-- `verify` - Run Verifier-Critic loop
-- `consolidate` - Create prioritized fix plan
-- `apply` - Apply fixes with verification
-- `complete` - Full pipeline until zero issues
-- `cross-verify` - Adversarial cross-verification
-
-### Verification Modes [ENH: ONE-SHOT]
-
-Three verification modes for different use cases:
-
-| Mode | Description | Min Rounds | Critic Required |
-|------|-------------|------------|-----------------|
-| `standard` | Full Verifier↔Critic loop | 3 | Yes |
-| `fast-track` | Early convergence for clean code | 1 | Optional (skipped if no issues) |
-| `single-pass` | Verifier only, fastest mode | 1 | No |
-
-**Usage:**
-```javascript
-elenchus_start_session({
-  target: "src/",
-  requirements: "security audit",
-  workingDir: "/project",
-  verificationMode: {
-    mode: "fast-track",  // or "standard", "single-pass"
-    skipCriticForCleanCode: true
-  }
-})
-```
+| Mode | Min Rounds | Critic Required | Use Case |
+|------|------------|-----------------|----------|
+| `standard` | 3 | Yes | Thorough verification |
+| `fast-track` | 1 | Optional | Quick validation |
+| `single-pass` | 1 | No | Fastest, Verifier-only |
 
 ### Convergence Criteria
 
-A session converges when ALL conditions are met:
-- Zero CRITICAL/HIGH severity unresolved issues
+Session converges when:
+- Zero CRITICAL/HIGH unresolved issues
 - All 5 categories examined (SECURITY, CORRECTNESS, RELIABILITY, MAINTAINABILITY, PERFORMANCE)
-- Edge case analysis documented
-- Negative assertions present (explicit "no issues" statements)
-- High-risk impacted files reviewed
-- Issues stabilized (no recent transitions)
-- Minimum rounds completed (varies by mode: standard=3, fast-track/single-pass=1)
-- Stable rounds without new issues (standard=2, others=1)
+- Edge cases documented, negative assertions present
+- Minimum rounds + stable rounds completed
+- No recent issue state transitions
 
 ### Issue Lifecycle
 
-Issues transition through: RAISED → CHALLENGED → RESOLVED/DISMISSED/MERGED/SPLIT
+`RAISED → CHALLENGED → RESOLVED/DISMISSED/MERGED/SPLIT`
 
-Critic must review issues before resolution. Verdicts: VALID, INVALID (false positive), PARTIAL.
+Critic verdicts: VALID, INVALID (false positive), PARTIAL.
 
 ## Code Style
 
-- TypeScript strict mode enabled
-- ESM modules with `.js` extensions in imports
+- TypeScript strict mode, ESM modules with `.js` extensions in imports
 - Zod schemas for all tool input validation
-- Enhancement comments use `// [ENH: TAG-ID]` format
+- Enhancement comments: `// [ENH: TAG-ID]`
 - Interfaces in `src/types/index.ts`, re-exported via index files
+
+## NPM Publish Workflow
+
+### Version Bump (2 locations)
+
+```bash
+# Update version in:
+- package.json          # "version": "X.Y.Z"
+- src/index.ts          # version: 'X.Y.Z' (in Server constructor)
+```
+
+### Steps
+
+1. Update version in both locations above
+2. Update CHANGELOG.md with new version entry (Added/Changed/Fixed/Removed sections)
+3. Update version links at bottom of CHANGELOG.md
+4. Run `npm run build` - must succeed
+5. Update README.md/README.ko.md if API changed
+6. Run `npm publish --access public`
+7. Create git commit and tag
+
+### Quick Checklist
+
+```
+[ ] Version in package.json
+[ ] Version in src/index.ts
+[ ] CHANGELOG.md entry
+[ ] npm run build succeeds
+[ ] README updated (if needed)
+[ ] Git commit and tag
+```
