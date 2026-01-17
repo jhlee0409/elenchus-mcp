@@ -77,6 +77,9 @@ export interface Issue {
   discoveredDuringDebate?: boolean; // True if found during Critic review
   // [ENH: AUTO-IMPACT] Automatic impact analysis (attached when issue raised)
   impactAnalysis?: IssueImpactAnalysis;
+  // [FIX: REL-01] Regression tracking
+  isRegression?: boolean;       // True if similar issue was previously resolved
+  regressionOf?: string;        // ID of the previously resolved issue
 }
 
 

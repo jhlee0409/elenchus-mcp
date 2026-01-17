@@ -709,11 +709,14 @@ export function checkConvergence(session: Session): ConvergenceStatus {
 
   // [ENH: ONE-SHOT] Single-pass convergence (most aggressive)
   // Converge if Verifier completed thorough check with no CRITICAL/HIGH issues
+  // [FIX: SEC-01] Added hasEdgeCaseCoverage and hasNegativeAssertions checks
   const singlePassConvergence =
     mode === 'single-pass' &&
     criticalUnresolved === 0 &&
     highUnresolved === 0 &&
     allCategoriesExamined &&
+    hasEdgeCaseCoverage &&
+    hasNegativeAssertions &&
     session.currentRound >= 1;
 
   const isConverged = standardConvergence || fastTrackConvergence || singlePassConvergence;

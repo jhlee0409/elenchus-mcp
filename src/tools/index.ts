@@ -963,6 +963,19 @@ export async function submitRound(
         issue.description += `\n\n⚠️ Impact Analysis: ${impactAnalysis.summary}`;
       }
 
+      // [FIX: REL-01] Regression detection - check if similar issue was previously resolved
+      const resolvedIssues = session.issues.filter(i => i.status === 'RESOLVED');
+      const similarResolved = resolvedIssues.find(resolved =>
+        resolved.location === issueData.location ||
+        (resolved.summary.toLowerCase().includes(issueData.summary.toLowerCase().split(' ')[0]) &&
+         resolved.category === issueData.category)
+      );
+      if (similarResolved) {
+        issue.isRegression = true;
+        issue.regressionOf = similarResolved.id;
+        issue.description += `\n\n🔄 REGRESSION: Similar issue ${similarResolved.id} was previously resolved in round ${similarResolved.resolvedInRound}`;
+      }
+
       issuesToUpsert.push(issue);
       raisedIds.push(issue.id);
       newIssues.push(issue);

@@ -201,7 +201,7 @@ export function validateRoleCompliance(
   state.currentExpectedRole = nextRole;
   state.alternation = {
     expectedRole: nextRole,
-    nextRole: role,  // The one after next
+    nextRole: role,  // [FIX: COR-01] Current role stored as "next after expectedRole" (i.e., the role that comes after nextRole)
     history: [...state.alternation.history, { role, round: session.currentRound + 1 }]
   };
 
