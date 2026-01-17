@@ -25,8 +25,6 @@
 - [MCP 리소스](#mcp-리소스)
 - [MCP 프롬프트](#mcp-프롬프트-슬래시-커맨드)
 - [검증 모드](#검증-모드)
-- [이슈 라이프사이클](#이슈-라이프사이클)
-- [수렴 감지](#수렴-감지)
 - [토큰 최적화](#토큰-최적화)
 - [설정](#설정)
 - [아키텍처](#아키텍처)
@@ -129,9 +127,44 @@ MCP 클라이언트 설정에 추가:
 
 | 클라이언트 | 상태 | 비고 |
 |-----------|------|------|
+| Claude Desktop | ✅ 지원 | macOS, Windows |
+| Claude Code | ✅ 지원 | CLI 도구 |
 | VS Code (Copilot) | ✅ 지원 | v1.102+ 필요 |
 | Cursor | ✅ 지원 | 40개 도구 제한 |
 | 기타 MCP 클라이언트 | ✅ 호환 | stdio 기반 클라이언트 |
+
+### Claude Desktop
+
+Claude Desktop 설정 파일에 추가:
+
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "elenchus": {
+      "command": "npx",
+      "args": ["-y", "@jhlee0409/elenchus-mcp"]
+    }
+  }
+}
+```
+
+### Claude Code
+
+Claude Code 설정 (`.mcp.json` 또는 `~/.claude/settings.json`)에 추가:
+
+```json
+{
+  "mcpServers": {
+    "elenchus": {
+      "command": "npx",
+      "args": ["-y", "@jhlee0409/elenchus-mcp"]
+    }
+  }
+}
+```
 
 ### VS Code (GitHub Copilot)
 
@@ -428,7 +461,8 @@ elenchus_start_session({
 
 ---
 
-## 이슈 라이프사이클
+<details>
+<summary><strong>이슈 라이프사이클</strong></summary>
 
 이슈는 여러 상태를 거칩니다:
 
@@ -442,7 +476,7 @@ RAISED → CHALLENGED → RESOLVED
         SPLIT (분할)
 ```
 
-### 이슈 상태
+#### 이슈 상태
 
 | 상태 | 설명 |
 |------|------|
@@ -453,7 +487,7 @@ RAISED → CHALLENGED → RESOLVED
 | `MERGED` | 다른 이슈와 병합 |
 | `SPLIT` | 여러 이슈로 분할 |
 
-### Critic 판정
+#### Critic 판정
 
 | 판정 | 의미 |
 |------|------|
@@ -461,9 +495,10 @@ RAISED → CHALLENGED → RESOLVED
 | `INVALID` | 오탐 |
 | `PARTIAL` | 부분적으로 유효, 개선 필요 |
 
----
+</details>
 
-## 수렴 감지
+<details>
+<summary><strong>수렴 감지</strong></summary>
 
 세션은 모든 조건이 충족되면 수렴합니다:
 
@@ -476,7 +511,7 @@ RAISED → CHALLENGED → RESOLVED
 - 클린 영역 명시적 선언 (부정 단언)
 - 고위험 영향 파일 검토 완료
 
-### 카테고리 커버리지
+#### 카테고리 커버리지
 
 5개 카테고리 모두 검토 필수:
 
@@ -485,23 +520,6 @@ RAISED → CHALLENGED → RESOLVED
 3. **RELIABILITY** - 에러 처리, 리소스 관리
 4. **MAINTAINABILITY** - 코드 구조, 문서화
 5. **PERFORMANCE** - 효율성, 리소스 사용
-
-<details>
-<summary><strong>엣지 케이스 카테고리</strong></summary>
-
-OWASP Testing Guide, Netflix Chaos Engineering, Google DiRT 기반:
-
-| # | 카테고리 | 체크 예시 |
-|---|----------|----------|
-| 1 | 코드 레벨 | null 입력, 경계값 |
-| 2 | 사용자 행동 | 더블클릭, 동시 세션 |
-| 3 | 외부 의존성 | 서비스 실패, 타임아웃 |
-| 4 | 비즈니스 로직 | 권한 변경, 상태 충돌 |
-| 5 | 데이터 상태 | 레거시 데이터, 손상 |
-| 6 | 환경 | 설정 드리프트, 리소스 제한 |
-| 7 | 스케일 | 트래픽 급증, 대용량 데이터 |
-| 8 | 보안 | 유효성 검사 우회, 세션 공격 |
-| 9 | 사이드 이펙트 | 작업 중 변경, 부분 실패 |
 
 </details>
 

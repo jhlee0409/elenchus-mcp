@@ -25,8 +25,6 @@
 - [MCP Resources](#mcp-resources)
 - [MCP Prompts](#mcp-prompts-slash-commands)
 - [Verification Modes](#verification-modes)
-- [Issue Lifecycle](#issue-lifecycle)
-- [Convergence Detection](#convergence-detection)
 - [Token Optimization](#token-optimization)
 - [Configuration](#configuration)
 - [Architecture](#architecture)
@@ -129,9 +127,44 @@ Then use naturally with your AI assistant:
 
 | Client | Status | Notes |
 |--------|--------|-------|
+| Claude Desktop | ✅ Supported | macOS, Windows |
+| Claude Code | ✅ Supported | CLI tool |
 | VS Code (Copilot) | ✅ Supported | Requires v1.102+ |
 | Cursor | ✅ Supported | 40 tool limit applies |
 | Other MCP Clients | ✅ Compatible | Any stdio-based client |
+
+### Claude Desktop
+
+Add to your Claude Desktop configuration file:
+
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "elenchus": {
+      "command": "npx",
+      "args": ["-y", "@jhlee0409/elenchus-mcp"]
+    }
+  }
+}
+```
+
+### Claude Code
+
+Add to your Claude Code settings (`.mcp.json` or `~/.claude/settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "elenchus": {
+      "command": "npx",
+      "args": ["-y", "@jhlee0409/elenchus-mcp"]
+    }
+  }
+}
+```
 
 ### VS Code (GitHub Copilot)
 
@@ -428,7 +461,8 @@ elenchus_start_session({
 
 ---
 
-## Issue Lifecycle
+<details>
+<summary><strong>Issue Lifecycle</strong></summary>
 
 Issues transition through states:
 
@@ -442,7 +476,7 @@ RAISED → CHALLENGED → RESOLVED
         SPLIT (divided)
 ```
 
-### Issue States
+#### Issue States
 
 | Status | Description |
 |--------|-------------|
@@ -453,7 +487,7 @@ RAISED → CHALLENGED → RESOLVED
 | `MERGED` | Combined with another issue |
 | `SPLIT` | Divided into multiple issues |
 
-### Critic Verdicts
+#### Critic Verdicts
 
 | Verdict | Meaning |
 |---------|---------|
@@ -461,9 +495,10 @@ RAISED → CHALLENGED → RESOLVED
 | `INVALID` | False positive |
 | `PARTIAL` | Partially valid, needs refinement |
 
----
+</details>
 
-## Convergence Detection
+<details>
+<summary><strong>Convergence Detection</strong></summary>
 
 A session converges when ALL criteria are met:
 
@@ -476,7 +511,7 @@ A session converges when ALL criteria are met:
 - Clean areas explicitly stated (negative assertions)
 - High-risk impacted files reviewed
 
-### Category Coverage
+#### Category Coverage
 
 All 5 categories must be examined:
 
@@ -485,23 +520,6 @@ All 5 categories must be examined:
 3. **RELIABILITY** - Error handling, resource management
 4. **MAINTAINABILITY** - Code structure, documentation
 5. **PERFORMANCE** - Efficiency, resource usage
-
-<details>
-<summary><strong>Edge Case Categories</strong></summary>
-
-Based on OWASP Testing Guide, Netflix Chaos Engineering, Google DiRT:
-
-| # | Category | Example Checks |
-|---|----------|----------------|
-| 1 | Code-level | Null inputs, boundary values |
-| 2 | User Behavior | Double-clicks, concurrent sessions |
-| 3 | External Dependencies | Service failures, timeouts |
-| 4 | Business Logic | Permission changes, state conflicts |
-| 5 | Data State | Legacy data, corruption |
-| 6 | Environment | Config drift, resource limits |
-| 7 | Scale | Traffic spikes, massive data |
-| 8 | Security | Validation bypass, session attacks |
-| 9 | Side Effects | Mid-operation changes, partial failures |
 
 </details>
 
