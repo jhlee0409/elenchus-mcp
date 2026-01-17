@@ -38,7 +38,7 @@ interface ExtendedServerCapabilities {
 const server = new Server(
   {
     name: 'elenchus-mcp',
-    version: '1.0.0'
+    version: '1.1.2'
   },
   {
     capabilities: {
