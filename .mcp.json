@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "elenchus": {
-      "command": "npx",
-      "args": ["-y", "@jhlee0409/elenchus-mcp"]
+      "command": "bash",
+      "args": ["-c", "npx -y @jhlee0409/elenchus-mcp"]
     }
   }
 }
