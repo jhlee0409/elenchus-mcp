@@ -8,8 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.1.2] - 2026-01-17
 
 ### Fixed
-- **zsh Compatibility** - Fixed npx binary resolution issue in zsh environments
-  - Use bash wrapper in `.mcp.json` for reliable execution
+- **Client-Agnostic Configuration** - Ensure `.mcp.json` uses standard npx syntax
+- **Documentation** - Update storage path from `~/.claude/elenchus/` to `~/.elenchus/`
 
 ---
 

@@ -36,7 +36,7 @@ npm run inspector  # Launch MCP Inspector for debugging
 - [ENH: ONE-SHOT] Fix application: `applyFix` - Apply fixes within session, refresh context, trigger re-verify
 
 **src/state/session.ts** - Session persistence and convergence detection:
-- Sessions stored at `~/.claude/elenchus/sessions/`
+- Sessions stored at `~/.elenchus/sessions/` (client-agnostic)
 - `checkConvergence()` - Intent-based convergence with 5 categories, edge case coverage, impact analysis
 - [ENH: ONE-SHOT] Supports `fast-track` and `single-pass` modes for faster convergence
 
