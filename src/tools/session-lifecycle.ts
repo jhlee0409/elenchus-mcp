@@ -748,14 +748,23 @@ export async function submitRound(
   if (args.issuesResolved) {
     for (const issueId of args.issuesResolved) {
       const issue = session.issues.find(i => i.id === issueId);
-      if (issue) {
-        if (!issue.criticReviewed) {
-          continue;
-        }
-
-        if (issue.criticVerdict === 'VALID' || issue.criticVerdict === 'INVALID') {
+      if (issue && issue.status !== 'RESOLVED') {
+        // If Critic reviewed, require verdict to be VALID or INVALID
+        // If not Critic reviewed, allow direct resolution (e.g., false positive dismissal)
+        if (issue.criticReviewed) {
+          if (issue.criticVerdict === 'VALID' || issue.criticVerdict === 'INVALID') {
+            issue.status = 'RESOLVED';
+            issue.resolvedInRound = session.currentRound + 1;
+            issue.resolution = issue.criticVerdict === 'INVALID'
+              ? 'Dismissed as false positive'
+              : 'Confirmed and resolved';
+            await upsertIssue(session.id, issue);
+          }
+        } else {
+          // Allow resolution without Critic review (e.g., Verifier dismissing own issue)
           issue.status = 'RESOLVED';
           issue.resolvedInRound = session.currentRound + 1;
+          issue.resolution = 'Resolved by ' + args.role;
           await upsertIssue(session.id, issue);
         }
       }
