@@ -30,7 +30,7 @@ import { generatePromptContent } from './prompts/index.js';
 const server = new Server(
   {
     name: 'elenchus-mcp',
-    version: '1.1.3'
+    version: '1.2.0'
   },
   {
     capabilities: {

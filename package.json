@@ -1,6 +1,6 @@
 {
   "name": "@jhlee0409/elenchus-mcp",
-  "version": "1.1.3",
+  "version": "1.2.0",
   "description": "MCP server for Elenchus adversarial verification system - state management, context sharing, and orchestration for code verification loops",
   "type": "module",
   "main": "dist/index.js",
@@ -20,7 +20,11 @@
     "start": "node dist/index.js",
     "inspector": "npx @modelcontextprotocol/inspector dist/index.js",
     "prepublishOnly": "npm run build",
-    "test": "node dist/index.js --version || exit 0"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "npm run build && vitest run --config vitest.integration.config.ts",
+    "test:all": "npm run test && npm run test:integration"
   },
   "keywords": [
     "mcp",
@@ -50,6 +54,8 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "typescript": "^5.0.0"
+    "@vitest/coverage-v8": "^4.0.17",
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.17"
   }
 }

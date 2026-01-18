@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-01-19
+
+### Added
+- **Multi-Language Prompt Templates** - Support for 8 languages
+  - English (en), Korean (한국어), Japanese (日本語)
+  - Chinese Simplified (简体中文), Chinese Traditional (繁體中文)
+  - Spanish (Español), French (Français), German (Deutsch)
+  - `detectLanguage()`: Auto-detect language from user input
+  - `getVerifierPrompt(lang)` / `getCriticPrompt(lang)`: Get localized prompts
+
+- **User Preferences Detection** - Auto-detect communication style
+  - Autonomy levels (L1-L4): Confirmation → Suggestion → Proceed → Delegate
+  - Verbosity levels: minimal, normal, detailed
+  - Pattern detection for Korean and English inputs
+  - Stored in `session.userPreferences` for consistent experience
+
+- **Session Integration** - Preferences applied throughout verification
+  - `createSession()` auto-detects preferences from requirements
+  - `startSession()` returns detected preferences in response
+  - `getRolePrompt()` uses detected language for prompts
+
+- **Quality Safeguards Auto-Activation** - Enhanced optimization safety
+  - `SafeguardsAutoActivationConfig`: Configure auto-enable with optimizations
+  - `getEffectiveSafeguardsConfig()`: Calculate effective config
+  - Higher sampling rates when differential/cache/pipeline active
+
+- **Convergence Improvements** - Better single-round support
+  - `updateCategoryMentionCache()`: O(1) category coverage check
+  - Support for `stableRoundsRequired=0` for true single-round verification
+
+### Changed
+- **Role Prompt Selection** - Now considers language preference
+  - `getRolePrompt()` accepts `language` option
+  - Falls back to English if language not specified
+
+---
+
 ## [1.1.4] - 2026-01-18
 
 ### Fixed
