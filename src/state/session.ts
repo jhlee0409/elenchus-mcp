@@ -16,6 +16,11 @@ import {
   Severity,
   IssueStatus
 } from '../types/index.js';
+import {
+  detectAutonomyLevel,
+  detectVerbosity
+} from '../utils/user-preferences.js';
+import { detectLanguage, type SupportedLanguage } from '../roles/i18n-prompts.js';
 // [FIX: SCHEMA-03] Use centralized schemas
 import {
   IssueStorageSchema,
@@ -124,14 +129,25 @@ function generateSessionId(target: string): string {
 
 /**
  * Create new session
+ * [ENH: I18N] Auto-detect user preferences from requirements
  */
 export async function createSession(
   target: string,
   requirements: string,
-  maxRounds: number = 10
+  maxRounds: number = 10,
+  options?: {
+    language?: SupportedLanguage;
+    autonomyLevel?: 1 | 2 | 3 | 4;
+    verbosity?: 'minimal' | 'normal' | 'detailed';
+  }
 ): Promise<Session> {
   const sessionId = generateSessionId(target);
   const now = new Date().toISOString();
+
+  // [ENH: I18N] Detect user preferences from requirements text
+  const detectedLanguage = options?.language ?? detectLanguage(requirements);
+  const detectedAutonomy = options?.autonomyLevel ?? detectAutonomyLevel(requirements);
+  const detectedVerbosity = options?.verbosity ?? detectVerbosity(requirements);
 
   const session: Session = {
     id: sessionId,
@@ -149,7 +165,14 @@ export async function createSession(
     rounds: [],
     checkpoints: [],
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
+    // [ENH: I18N] Store detected preferences
+    userPreferences: {
+      language: detectedLanguage,
+      autonomyLevel: detectedAutonomy,
+      verbosity: detectedVerbosity,
+      detectedFrom: requirements.slice(0, 100)
+    }
   };
 
   sessions.set(sessionId, session);

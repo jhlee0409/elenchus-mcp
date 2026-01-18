@@ -270,6 +270,13 @@ export interface Session {
   };
   // [ENH: CAT-CACHE] Category mention cache for O(1) convergence check
   mentionedCategories?: Set<IssueCategory>;
+  // [ENH: I18N] Detected language and user preferences
+  userPreferences?: {
+    language: 'en' | 'ko' | 'ja' | 'zh-CN' | 'zh-TW' | 'es' | 'fr' | 'de';
+    autonomyLevel: 1 | 2 | 3 | 4;
+    verbosity: 'minimal' | 'normal' | 'detailed';
+    detectedFrom: string;
+  };
   // [ENH: PIPELINE-PERSIST] Pipeline state for persistence across restarts
   pipelineState?: {
     currentTier: 'screen' | 'focused' | 'exhaustive';

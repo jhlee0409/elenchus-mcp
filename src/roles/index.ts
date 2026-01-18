@@ -43,16 +43,21 @@ export {
   type CompressedPromptConfig
 } from './compressed-prompts.js';
 // [ENH: I18N] Multi-language prompt templates
+import {
+  type SupportedLanguage as I18nSupportedLanguage,
+  getVerifierPrompt as getI18nVerifierPrompt,
+  getCriticPrompt as getI18nCriticPrompt
+} from './i18n-prompts.js';
+export type SupportedLanguage = I18nSupportedLanguage;
 export {
   VERIFIER_PROMPTS,
   CRITIC_PROMPTS,
   detectLanguage,
-  getVerifierPrompt,
-  getCriticPrompt,
+  getVerifierPrompt as getI18nVerifier,
+  getCriticPrompt as getI18nCritic,
   getRolePrompts,
   LANGUAGE_METADATA,
-  SUPPORTED_LANGUAGES,
-  type SupportedLanguage
+  SUPPORTED_LANGUAGES
 } from './i18n-prompts.js';
 // [ENH: TOKEN-OPT] Structured output - re-export at bottom
 export {
@@ -411,11 +416,23 @@ export function getExpectedRole(sessionId: string): VerifierRole {
 /**
  * Get role prompt
  * [ENH: CONCISE] Supports concise mode for round 2+
+ * [ENH: I18N] Supports language selection
  */
 export function getRolePrompt(
   role: VerifierRole,
-  options?: { round?: number; useConciseMode?: boolean }
+  options?: {
+    round?: number;
+    useConciseMode?: boolean;
+    language?: SupportedLanguage;
+  }
 ): RolePrompt {
+  // [ENH: I18N] If language specified, use i18n prompts
+  if (options?.language && options.language !== 'en') {
+    return role === 'verifier'
+      ? getI18nVerifierPrompt(options.language)
+      : getI18nCriticPrompt(options.language);
+  }
+
   // If concise mode is enabled and round >= 2, return concise prompt
   if (options?.useConciseMode && options?.round && options.round >= 2) {
     return role === 'verifier'
