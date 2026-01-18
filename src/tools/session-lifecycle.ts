@@ -600,6 +600,7 @@ export async function getContext(
 
 /**
  * Submit round output and get analysis
+ * [REFACTORED] Uses helper functions from submit-round-helpers.ts for better maintainability
  */
 export async function submitRound(
   args: z.infer<typeof SubmitRoundSchema>
@@ -612,10 +613,19 @@ export async function submitRound(
   staleIssues?: StaleIssueInfo[];
   lifecycle?: IssueTransitionResult;
 } | null> {
+  // Import helpers
+  const {
+    processNewIssues,
+    processCriticVerdicts,
+    processResolvedIssues,
+    processLifecycleTransitions,
+    determineNextRole
+  } = await import('./submit-round-helpers.js');
+
   const session = await getSession(args.sessionId);
   if (!session) return null;
 
-  // Role Compliance Check
+  // Step 1: Role Compliance Check
   const roleCompliance = validateRoleCompliance(
     args.sessionId,
     args.role as VerifierRole,
@@ -623,7 +633,7 @@ export async function submitRound(
     session
   );
 
-  // [ENH: CRIT-01] Strict mode enforcement
+  // Strict mode enforcement
   const roleState = getRoleState(args.sessionId);
   if (roleState?.config.strictMode && !roleCompliance.isCompliant) {
     const errorViolations = roleCompliance.violations.filter(v => v.severity === 'ERROR');
@@ -642,136 +652,37 @@ export async function submitRound(
     };
   }
 
-  // Check for new file references
+  // Step 2: Check for new file references and expand context
   const newFiles = findNewFileReferences(args.output, session.context);
   let contextExpanded = false;
-
   if (newFiles.length > 0) {
     const added = await expandContext(session.id, newFiles, session.currentRound + 1);
     contextExpanded = added.length > 0;
   }
 
-  // Process new issues with evidence validation
-  const raisedIds: string[] = [];
-  const newIssues: Issue[] = [];
-  const evidenceValidation: Record<string, EvidenceValidationResult> = {};
+  // Step 3: Process new issues with validation
+  let raisedIds: string[] = [];
+  let newIssues: Issue[] = [];
+  let evidenceValidation: Record<string, EvidenceValidationResult> = {};
 
   if (args.issuesRaised) {
-    // Phase 1: Parallel validation and impact analysis
-    const processedResults = await Promise.all(
-      args.issuesRaised.map(async (issueData) => {
-        const validationResult = await validateIssueEvidence(
-          session.context,
-          issueData.location,
-          issueData.evidence
-        );
-        const impactAnalysis = analyzeIssueImpact(session.id, issueData.location);
-        return { issueData, validationResult, impactAnalysis };
-      })
-    );
-
-    // Phase 2: Build issue objects
-    const issuesToUpsert: Issue[] = [];
-    for (const { issueData, validationResult, impactAnalysis } of processedResults) {
-      evidenceValidation[issueData.id] = validationResult;
-
-      const issue: Issue = {
-        ...issueData,
-        raisedBy: args.role,
-        raisedInRound: session.currentRound + 1,
-        status: 'RAISED',
-        impactAnalysis: impactAnalysis || undefined
-      };
-
-      if (!validationResult.isValid) {
-        issue.description += `\n\nEvidence validation warning: ${validationResult.warnings.join('; ')}`;
-      }
-
-      if (impactAnalysis && (impactAnalysis.riskLevel === 'HIGH' || impactAnalysis.riskLevel === 'CRITICAL')) {
-        issue.description += `\n\nImpact Analysis: ${impactAnalysis.summary}`;
-      }
-
-      // Regression detection
-      const resolvedIssues = session.issues.filter(i => i.status === 'RESOLVED');
-      const similarResolved = resolvedIssues.find(resolved =>
-        resolved.location === issueData.location ||
-        (resolved.summary.toLowerCase().includes(issueData.summary.toLowerCase().split(' ')[0]) &&
-         resolved.category === issueData.category)
-      );
-      if (similarResolved) {
-        issue.isRegression = true;
-        issue.regressionOf = similarResolved.id;
-        issue.description += `\n\nREGRESSION: Similar issue ${similarResolved.id} was previously resolved in round ${similarResolved.resolvedInRound}`;
-      }
-
-      issuesToUpsert.push(issue);
-      raisedIds.push(issue.id);
-      newIssues.push(issue);
-    }
-
-    // Phase 3: Batch upsert
-    await batchUpsertIssues(session.id, issuesToUpsert);
+    const result = await processNewIssues(args.issuesRaised, session, args.role);
+    raisedIds = result.raisedIds;
+    newIssues = result.issues;
+    evidenceValidation = result.evidenceValidation;
   }
 
-  // [ENH: CRIT-02] Process Critic verdicts
+  // Step 4: Process Critic verdicts
   if (args.role === 'critic') {
-    const verdictPatterns = [
-      /(?:issue\s+)?([A-Z]{3}-\d+)[:\s]+(?:verdict[:\s]+)?(VALID|INVALID|PARTIAL)/gi,
-      /(SEC|COR|REL|MNT|PRF)-(\d+)[:\s]+(VALID|INVALID|PARTIAL)/gi
-    ];
-
-    for (const pattern of verdictPatterns) {
-      let match;
-      while ((match = pattern.exec(args.output)) !== null) {
-        const issueId = match[1].includes('-') ? match[1] : `${match[1]}-${match[2]}`;
-        const verdict = (match[2] || match[3]).toUpperCase() as 'VALID' | 'INVALID' | 'PARTIAL';
-
-        const issue = session.issues.find(i => i.id.toUpperCase() === issueId.toUpperCase());
-        if (issue) {
-          issue.criticReviewed = true;
-          issue.criticVerdict = verdict;
-          issue.criticReviewRound = session.currentRound + 1;
-
-          if (verdict === 'INVALID') {
-            issue.status = 'RESOLVED';
-            issue.resolvedInRound = session.currentRound + 1;
-            issue.resolution = 'Marked as false positive by Critic';
-          }
-
-          await upsertIssue(session.id, issue);
-        }
-      }
-    }
+    await processCriticVerdicts(session, args.output, session.currentRound);
   }
 
-  // [ENH: CRIT-02] Process resolved issues
+  // Step 5: Process resolved issues
   if (args.issuesResolved) {
-    for (const issueId of args.issuesResolved) {
-      const issue = session.issues.find(i => i.id === issueId);
-      if (issue && issue.status !== 'RESOLVED') {
-        // If Critic reviewed, require verdict to be VALID or INVALID
-        // If not Critic reviewed, allow direct resolution (e.g., false positive dismissal)
-        if (issue.criticReviewed) {
-          if (issue.criticVerdict === 'VALID' || issue.criticVerdict === 'INVALID') {
-            issue.status = 'RESOLVED';
-            issue.resolvedInRound = session.currentRound + 1;
-            issue.resolution = issue.criticVerdict === 'INVALID'
-              ? 'Dismissed as false positive'
-              : 'Confirmed and resolved';
-            await upsertIssue(session.id, issue);
-          }
-        } else {
-          // Allow resolution without Critic review (e.g., Verifier dismissing own issue)
-          issue.status = 'RESOLVED';
-          issue.resolvedInRound = session.currentRound + 1;
-          issue.resolution = 'Resolved by ' + args.role;
-          await upsertIssue(session.id, issue);
-        }
-      }
-    }
+    await processResolvedIssues(session, args.issuesResolved, args.role, session.currentRound);
   }
 
-  // [ENH: LIFECYCLE] Detect issue transitions
+  // Step 6: Detect and process issue lifecycle transitions
   const lifecycleResult = detectIssueTransitions(
     session,
     args.role as 'verifier' | 'critic',
@@ -779,90 +690,17 @@ export async function submitRound(
     session.issues
   );
 
-  // Process severity changes
-  for (const change of lifecycleResult.severityChanges) {
-    const issue = session.issues.find(i => i.id === change.issueId);
-    if (issue) {
-      const updated = changeSeverity(
-        issue,
-        change.toSeverity,
-        session.currentRound + 1,
-        change.reason,
-        args.role as 'verifier' | 'critic'
-      );
-      await upsertIssue(session.id, updated);
-    }
-  }
+  const { updatedRaisedIds, updatedNewIssues } = await processLifecycleTransitions(
+    session,
+    lifecycleResult,
+    args.role,
+    raisedIds,
+    newIssues
+  );
+  raisedIds = updatedRaisedIds;
+  newIssues = updatedNewIssues;
 
-  // Process merge requests
-  for (const merge of lifecycleResult.mergeRequests) {
-    const target = session.issues.find(i => i.id === merge.targetId);
-    const sources = session.issues.filter(i => merge.sourceIds.includes(i.id));
-
-    if (target && sources.length > 0) {
-      const { target: updatedTarget, sources: updatedSources } = mergeIssues(
-        target,
-        sources,
-        session.currentRound + 1,
-        args.role as 'verifier' | 'critic'
-      );
-      await upsertIssue(session.id, updatedTarget);
-      for (const src of updatedSources) {
-        await upsertIssue(session.id, src);
-      }
-    }
-  }
-
-  // Process split requests
-  for (const split of lifecycleResult.splitRequests) {
-    const source = session.issues.find(i => i.id === split.sourceId);
-    if (source) {
-      const { source: updatedSource, newIssues: splitIssues } = splitIssue(
-        source,
-        split.newIssues,
-        session.currentRound + 1,
-        args.role as 'verifier' | 'critic'
-      );
-      await upsertIssue(session.id, updatedSource);
-      for (const newIssue of splitIssues) {
-        await upsertIssue(session.id, newIssue);
-        raisedIds.push(newIssue.id);
-      }
-    }
-  }
-
-  // Process discovered issues
-  for (const discovered of lifecycleResult.newIssues) {
-    if (discovered.id && discovered.summary) {
-      const issue: Issue = {
-        id: discovered.id,
-        category: discovered.category || 'CORRECTNESS',
-        severity: discovered.severity || 'MEDIUM',
-        summary: discovered.summary,
-        location: discovered.location || 'TBD',
-        description: discovered.description || discovered.summary,
-        evidence: discovered.evidence || 'Discovered during debate - evidence to be provided',
-        raisedBy: 'critic',
-        raisedInRound: session.currentRound + 1,
-        status: 'RAISED',
-        discoveredDuringDebate: true,
-        transitions: [{
-          type: 'DISCOVERED',
-          fromStatus: 'RAISED',
-          toStatus: 'RAISED',
-          round: session.currentRound + 1,
-          reason: 'Issue discovered during Critic review',
-          triggeredBy: 'critic',
-          timestamp: new Date().toISOString()
-        }]
-      };
-      await upsertIssue(session.id, issue);
-      raisedIds.push(issue.id);
-      newIssues.push(issue);
-    }
-  }
-
-  // Add round
+  // Step 7: Add round
   const round = await addRound(session.id, {
     role: args.role,
     input: getContextSummary(session.context),
@@ -873,45 +711,32 @@ export async function submitRound(
     newFilesDiscovered: newFiles
   });
 
-  // Check for basic arbiter intervention
+  // Step 8: Check for interventions
   const intervention = checkForIntervention(session, args.output, newFiles);
+  const mediatorInterventions = analyzeRoundAndIntervene(session, args.output, args.role, newIssues);
 
-  // Mediator Active Intervention analysis
-  const mediatorInterventions = analyzeRoundAndIntervene(
-    session,
-    args.output,
-    args.role,
-    newIssues
-  );
-
-  // Auto checkpoint every 2 rounds
+  // Step 9: Auto checkpoint every 2 rounds
   if (session.currentRound % 2 === 0) {
     await createCheckpoint(session.id);
   }
 
-  // Check convergence
+  // Step 10: Check convergence and determine next role
   const updatedSession = await getSession(session.id);
   const convergence = checkConvergence(updatedSession!);
 
-  // Determine next role
   const verificationMode = updatedSession?.verificationMode?.mode || 'standard';
-  const expectedNextRole = getExpectedRole(args.sessionId);
-  let nextRole: 'verifier' | 'critic' | 'complete' = 'complete';
+  const nextRole = determineNextRole(
+    convergence.isConverged,
+    session.currentRound,
+    session.maxRounds,
+    verificationMode,
+    args.role,
+    raisedIds.length,
+    updatedSession?.verificationMode?.skipCriticForCleanCode ?? true,
+    getExpectedRole(args.sessionId)
+  );
 
-  if (!convergence.isConverged && session.currentRound < session.maxRounds) {
-    if (verificationMode === 'single-pass') {
-      nextRole = 'verifier';
-    } else if (verificationMode === 'fast-track' &&
-               args.role === 'verifier' &&
-               raisedIds.length === 0 &&
-               (updatedSession?.verificationMode?.skipCriticForCleanCode ?? true)) {
-      nextRole = 'verifier';
-    } else {
-      nextRole = expectedNextRole;
-    }
-  }
-
-  // Determine concise mode
+  // Step 11: Prepare response
   const nextRoundNumber = session.currentRound + 2;
   const useConciseMode = nextRole !== 'complete' &&
     shouldUseConciseModeForSession(updatedSession!, nextRoundNumber);

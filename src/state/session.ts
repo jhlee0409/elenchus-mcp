@@ -437,317 +437,88 @@ export async function rollbackToCheckpoint(
 
 /**
  * Check convergence status
- * [ENH: CRIT-03] Include HIGH severity in convergence check
- * [ENH: HIGH-05] Add category coverage to convergence
- * [ENH: LIFECYCLE] Add issue stabilization check
- * [ENH: ALGO] Single-pass aggregation - O(n) instead of O(5n) for issue counts
+ * [REFACTORED] Uses helper functions from convergence-helpers.ts for better maintainability
  */
 export function checkConvergence(session: Session): ConvergenceStatus {
-  const categories: IssueCategory[] = [
-    'SECURITY', 'CORRECTNESS', 'RELIABILITY', 'MAINTAINABILITY', 'PERFORMANCE'
-  ];
+  // Import helpers inline to avoid circular dependencies
+  const {
+    aggregateIssues,
+    calculateCategoryCoverage,
+    countRoundsWithoutNewIssues,
+    analyzeEdgeCaseCoverage,
+    hasNegativeAssertions: checkNegativeAssertions,
+    calculateImpactCoverage,
+    evaluateConvergence,
+    buildConvergenceReason
+  } = require('./convergence-helpers.js');
 
-  const categoryTotals: Record<IssueCategory, number> = {
-    SECURITY: 8,
-    CORRECTNESS: 6,
-    RELIABILITY: 4,
-    MAINTAINABILITY: 4,
-    PERFORMANCE: 4
-  };
+  // Step 1: Single-pass aggregation of all issue counts
+  const aggregation = aggregateIssues(session.issues, session.currentRound);
+  const {
+    categoryCounts,
+    unresolvedIssues,
+    criticalUnresolved,
+    highUnresolved,
+    dismissedCount,
+    mergedCount,
+    recentTransitions
+  } = aggregation;
 
-  // =============================================================================
-  // [ENH: ALGO] Single-pass aggregation - compute all counts in one iteration
-  // Reduces from 5+ iterations to 1 iteration over issues array
-  // =============================================================================
-
-  const categoryCounts: Record<IssueCategory, number> = {
-    SECURITY: 0, CORRECTNESS: 0, RELIABILITY: 0, MAINTAINABILITY: 0, PERFORMANCE: 0
-  };
-
-  let unresolvedIssues = 0;
-  let criticalUnresolved = 0;
-  let highUnresolved = 0;
-  let dismissedCount = 0;
-  let mergedCount = 0;
-  let recentTransitions = 0;
-
-  const inactiveStatuses: IssueStatus[] = ['RESOLVED', 'DISMISSED', 'MERGED'];
-  const transitionCutoff = session.currentRound - 1;
-
-  // Single pass through all issues
-  for (const issue of session.issues) {
-    // Count by category
-    categoryCounts[issue.category]++;
-
-    // Count by status
-    if (issue.status === 'DISMISSED') {
-      dismissedCount++;
-    } else if (issue.status === 'MERGED') {
-      mergedCount++;
-    }
-
-    // Count active (unresolved) issues and their severities
-    if (!inactiveStatuses.includes(issue.status)) {
-      unresolvedIssues++;
-      if (issue.severity === 'CRITICAL') criticalUnresolved++;
-      if (issue.severity === 'HIGH') highUnresolved++;
-    }
-
-    // Count recent transitions (sliding window)
-    if (issue.transitions) {
-      for (const t of issue.transitions) {
-        if (t.round >= transitionCutoff) {
-          recentTransitions++;
-        }
-      }
-    }
-  }
-
-  // Build categoryCoverage from single-pass counts
-  const categoryCoverage: Record<IssueCategory, { checked: number; total: number }> =
-    {} as Record<IssueCategory, { checked: number; total: number }>;
-
-  for (const cat of categories) {
-    categoryCoverage[cat] = { checked: categoryCounts[cat], total: categoryTotals[cat] };
-  }
-
-  // [ENH: LIFECYCLE] Issue stabilization check
   const issuesStabilized = recentTransitions === 0;
 
-  // Count rounds without new issues
-  let roundsWithoutNewIssues = 0;
-  for (let i = session.rounds.length - 1; i >= 0; i--) {
-    if (session.rounds[i].issuesRaised.length === 0) {
-      roundsWithoutNewIssues++;
-    } else {
-      break;
-    }
-  }
+  // Step 2: Calculate category coverage
+  const {
+    categoryCoverage,
+    allCategoriesExamined,
+    uncoveredCategories
+  } = calculateCategoryCoverage(categoryCounts, session.rounds, session.issues);
 
-  // =============================================================================
-  // [ENH: INTENT-BASED] Category Coverage Check
-  // Instead of keyword matching, check for explicit category mentions or issues
-  // Trust the LLM to semantically examine categories
-  // =============================================================================
-  
-  const uncoveredCategories: IssueCategory[] = [];
-  for (const cat of categories) {
-    // Check if category was explicitly examined (mentioned or has issues)
-    const hasIssueInCategory = session.issues.some(i => i.category === cat);
-    const categoryMentionedExplicitly = session.rounds.some(r => 
-      r.output.toUpperCase().includes(cat)  // Just check category name itself
-    );
-    
-    if (!hasIssueInCategory && !categoryMentionedExplicitly) {
-      uncoveredCategories.push(cat);
-    }
-  }
-  const allCategoriesExamined = uncoveredCategories.length === 0;
+  // Step 3: Count rounds without new issues
+  const roundsWithoutNewIssues = countRoundsWithoutNewIssues(session.rounds);
 
-  // =============================================================================
-  // [ENH: INTENT-BASED] Edge Case Coverage Check
-  // Instead of hardcoded keyword lists, check for STRUCTURED edge case analysis
-  // Trust the LLM's semantic understanding of what constitutes edge case coverage
-  // =============================================================================
-  
-  // Edge case categories are conceptual - we track them for reporting, not keyword matching
-  const edgeCaseCategoryNames = [
-    'codeLevel',          // null, undefined, boundary values
-    'userBehavior',       // double-click, race conditions
-    'externalDependencies', // API failures, timeouts
-    'businessLogic',      // permission, state transitions
-    'dataState',          // legacy data, corruption
-    'environment',        // config drift, resource limits
-    'scale',              // high concurrency, large data
-    'security',           // input validation, session attacks
-    'sideEffects'         // state mutation, transactions
-  ];
-
-  // Intent-based edge case detection:
-  // Check for STRUCTURAL indicators of edge case analysis, not specific keywords
+  // Step 4: Analyze edge case coverage
   const allOutputs = session.rounds.map(r => r.output).join('\n');
-  
-  // Structural indicators that edge cases were considered
-  const edgeCaseStructuralIndicators = [
-    // Section headers (multiple languages)
-    /edge\s*case|엣지\s*케이스|경계\s*(조건|케이스)|boundary|corner\s*case/i,
-    // Explicit edge case enumeration
-    /what\s*if|만약.*라면|when.*fails?|failure\s*scenario/i,
-    // Negative/boundary thinking
-    /empty|null|없.*경우|zero|maximum|minimum|overflow|underflow/i
-  ];
-  
-  const hasStructuralEdgeCaseAnalysis = edgeCaseStructuralIndicators.some(
-    pattern => pattern.test(allOutputs)
+  const {
+    hasEdgeCaseCoverage,
+    hasComprehensiveEdgeCaseCoverage,
+    edgeCaseCategoryCoverage,
+    coveredEdgeCaseCategories,
+    missingEdgeCaseCategories
+  } = analyzeEdgeCaseCoverage(allOutputs);
+
+  // Step 5: Check negative assertions
+  const hasNegativeAssertions = checkNegativeAssertions(allOutputs);
+
+  // Step 6: Calculate impact coverage
+  const impactResult = calculateImpactCoverage(session.issues, allOutputs);
+
+  // Step 7: Evaluate convergence
+  const { isConverged } = evaluateConvergence(
+    session,
+    aggregation,
+    allCategoriesExamined,
+    roundsWithoutNewIssues,
+    hasEdgeCaseCoverage,
+    hasNegativeAssertions,
+    impactResult.hasHighRiskCoverage
   );
 
-  // For convergence tracking, we use a simplified semantic check
-  // The detailed validation is in role definitions, this is just for status reporting
-  const edgeCaseCategoryCoverage: Record<string, boolean> = {};
-  
-  // Instead of keyword matching, check for evidence of thinking about each area
-  // This is a soft check - the real validation happens in role enforcement
-  for (const category of edgeCaseCategoryNames) {
-    // Simple heuristic: check if there are mentions that suggest the category was considered
-    // This is intentionally loose - the strict validation is in checkEdgeCaseCoverage
-    edgeCaseCategoryCoverage[category] = hasStructuralEdgeCaseAnalysis;
-  }
-
-  const coveredEdgeCaseCategories = hasStructuralEdgeCaseAnalysis ? edgeCaseCategoryNames : [];
-  const missingEdgeCaseCategories = hasStructuralEdgeCaseAnalysis ? [] : edgeCaseCategoryNames;
-
-  // Edge case coverage is determined by structural analysis presence
-  const hasEdgeCaseCoverage = hasStructuralEdgeCaseAnalysis;
-  const hasComprehensiveEdgeCaseCoverage = hasStructuralEdgeCaseAnalysis;
-
-  // =============================================================================
-  // [ENH: INTENT-BASED] Negative Assertions Check
-  // Check for explicit statements of "verified clean" or "no issues found"
-  // =============================================================================
-  
-  const negativeAssertionPatterns = [
-    // Explicit clean statements
-    /no\s*(issues?|problems?|concerns?)(\s*found)?/i,
-    /이슈\s*없|문제\s*없|이상\s*없/i,
-    /clean|passed|verified|확인.*완료/i,
-    /✓|✔|✅/,
-    // Explicit "checked X, found nothing" pattern
-    /(checked|reviewed|examined|verified).*no\s*(issues?|problems?)/i
-  ];
-  
-  const hasNegativeAssertions = negativeAssertionPatterns.some(
-    pattern => pattern.test(allOutputs)
+  // Step 8: Build reason string
+  const reason = buildConvergenceReason(
+    isConverged,
+    null, // convergenceType not needed for reason
+    aggregation,
+    session,
+    allCategoriesExamined,
+    uncoveredCategories,
+    hasEdgeCaseCoverage,
+    hasNegativeAssertions,
+    impactResult.hasHighRiskCoverage,
+    impactResult.unreviewedHighRisk,
+    roundsWithoutNewIssues,
+    impactResult.coverageRate,
+    impactResult.totalImpactedFiles
   );
-
-  // =============================================================================
-  // [ENH: AUTO-IMPACT] Impact Coverage Validation
-  // Check that all impacted files from issues have been reviewed
-  // =============================================================================
-
-  // Collect all impacted files from issues with impact analysis
-  const impactedFiles = new Set<string>();
-  const highRiskImpactedFiles = new Set<string>();
-
-  for (const issue of session.issues) {
-    if (issue.impactAnalysis) {
-      // Add callers
-      for (const caller of issue.impactAnalysis.callers || []) {
-        impactedFiles.add(caller.file);
-        if (issue.impactAnalysis.riskLevel === 'HIGH' || issue.impactAnalysis.riskLevel === 'CRITICAL') {
-          highRiskImpactedFiles.add(caller.file);
-        }
-      }
-      // Add dependencies
-      for (const dep of issue.impactAnalysis.dependencies || []) {
-        impactedFiles.add(dep.file);
-      }
-    }
-  }
-
-  // Check which impacted files were mentioned in rounds
-  const allOutputsLower = allOutputs.toLowerCase();
-  const reviewedImpactedFiles: string[] = [];
-  const unreviewedImpactedFiles: string[] = [];
-
-  for (const file of impactedFiles) {
-    // Extract filename for matching
-    const filename = file.split('/').pop() || file;
-    if (allOutputsLower.includes(filename.toLowerCase()) || allOutputsLower.includes(file.toLowerCase())) {
-      reviewedImpactedFiles.push(file);
-    } else {
-      unreviewedImpactedFiles.push(file);
-    }
-  }
-
-  // Calculate impact coverage
-  const impactCoverageRate = impactedFiles.size > 0
-    ? reviewedImpactedFiles.length / impactedFiles.size
-    : 1;
-  const hasAdequateImpactCoverage = impactCoverageRate >= 0.7;  // 70% coverage required
-
-  // Check high-risk files specifically
-  const unreviewedHighRisk = Array.from(highRiskImpactedFiles).filter(
-    f => !reviewedImpactedFiles.includes(f)
-  );
-  const hasHighRiskCoverage = unreviewedHighRisk.length === 0;
-
-  // =============================================================================
-  // [ENH: ONE-SHOT] Convergence Decision with Verification Mode Support
-  // =============================================================================
-
-  const mode = session.verificationMode?.mode || 'standard';
-  const minRounds = session.verificationMode?.minRounds ?? (mode === 'standard' ? 3 : mode === 'fast-track' ? 1 : 1);
-  const stableRoundsRequired = session.verificationMode?.stableRoundsRequired ?? (mode === 'standard' ? 2 : 1);
-
-  // [ENH: ONE-SHOT] Fast-track convergence for clean code
-  const isCleanCode = unresolvedIssues === 0 && session.issues.length === 0;
-  const canFastTrack = mode === 'fast-track' || mode === 'single-pass';
-  const skipStrictChecks = canFastTrack && isCleanCode;
-
-  // Standard convergence criteria
-  const standardConvergence =
-    criticalUnresolved === 0 &&
-    highUnresolved === 0 &&
-    roundsWithoutNewIssues >= stableRoundsRequired &&
-    session.currentRound >= minRounds &&
-    allCategoriesExamined &&
-    issuesStabilized &&
-    hasEdgeCaseCoverage &&
-    hasNegativeAssertions &&
-    hasHighRiskCoverage;
-
-  // [ENH: ONE-SHOT] Fast-track convergence for clean code
-  // If no issues found after thorough check, allow early convergence
-  const fastTrackConvergence =
-    canFastTrack &&
-    criticalUnresolved === 0 &&
-    highUnresolved === 0 &&
-    allCategoriesExamined &&
-    hasEdgeCaseCoverage &&
-    hasNegativeAssertions &&
-    session.currentRound >= 1;  // At least one complete round
-
-  // [ENH: ONE-SHOT] Single-pass convergence (most aggressive)
-  // Converge if Verifier completed thorough check with no CRITICAL/HIGH issues
-  // [FIX: SEC-01] Added hasEdgeCaseCoverage and hasNegativeAssertions checks
-  const singlePassConvergence =
-    mode === 'single-pass' &&
-    criticalUnresolved === 0 &&
-    highUnresolved === 0 &&
-    allCategoriesExamined &&
-    hasEdgeCaseCoverage &&
-    hasNegativeAssertions &&
-    session.currentRound >= 1;
-
-  const isConverged = standardConvergence || fastTrackConvergence || singlePassConvergence;
-
-  // Build detailed reason
-  let reason: string;
-  if (isConverged) {
-    const impactInfo = impactedFiles.size > 0
-      ? `, impact coverage: ${(impactCoverageRate * 100).toFixed(0)}%`
-      : '';
-    const modeInfo = mode !== 'standard' ? ` [${mode} mode]` : '';
-    reason = `All critical/high issues resolved, all categories examined, edge cases analyzed, issues stabilized, ${roundsWithoutNewIssues}+ rounds stable${impactInfo}${modeInfo}`;
-  } else if (criticalUnresolved > 0) {
-    reason = `${criticalUnresolved} CRITICAL issues unresolved`;
-  } else if (highUnresolved > 0) {
-    reason = `${highUnresolved} HIGH severity issues unresolved`;
-  } else if (!allCategoriesExamined) {
-    reason = `Categories not examined: ${uncoveredCategories.join(', ')}`;
-  } else if (!hasEdgeCaseCoverage) {
-    reason = 'Edge case analysis not documented - include "Edge Cases:" section with boundary/failure scenarios';
-  } else if (!hasNegativeAssertions) {
-    reason = 'Missing negative assertions - must state what was verified as clean';
-  } else if (!hasHighRiskCoverage) {
-    reason = `High-risk impacted files not reviewed: ${unreviewedHighRisk.slice(0, 3).join(', ')}`;
-  } else if (!issuesStabilized && mode === 'standard') {
-    reason = `Issues still changing (${recentTransitions} recent transitions)`;
-  } else if (session.currentRound < minRounds) {
-    reason = `Minimum ${minRounds} round(s) required (current: ${session.currentRound}) [${mode} mode]`;
-  } else {
-    reason = 'Verification in progress';
-  }
 
   return {
     isConverged,
@@ -759,27 +530,23 @@ export function checkConvergence(session: Session): ConvergenceStatus {
     roundsWithoutNewIssues,
     allCategoriesExamined,
     uncoveredCategories,
-    // [ENH: LIFECYCLE] Issue lifecycle tracking
     issuesStabilized,
     recentTransitions,
     dismissedCount,
     mergedCount,
-    // [ENH: EXHAUST] Exhaustive verification tracking
     hasEdgeCaseCoverage,
     hasNegativeAssertions,
-    // Edge case tracking (intent-based - for reporting only)
     edgeCaseCategoryCoverage,
     coveredEdgeCaseCategories,
     missingEdgeCaseCategories,
     hasComprehensiveEdgeCaseCoverage,
-    // [ENH: AUTO-IMPACT] Impact coverage tracking
     impactCoverage: {
-      totalImpactedFiles: impactedFiles.size,
-      reviewedImpactedFiles: reviewedImpactedFiles.length,
-      unreviewedImpactedFiles,
-      coverageRate: impactCoverageRate,
-      hasHighRiskCoverage,
-      unreviewedHighRisk
+      totalImpactedFiles: impactResult.totalImpactedFiles,
+      reviewedImpactedFiles: impactResult.reviewedImpactedFiles,
+      unreviewedImpactedFiles: impactResult.unreviewedImpactedFiles,
+      coverageRate: impactResult.coverageRate,
+      hasHighRiskCoverage: impactResult.hasHighRiskCoverage,
+      unreviewedHighRisk: impactResult.unreviewedHighRisk
     }
   };
 }

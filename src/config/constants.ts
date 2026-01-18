@@ -134,6 +134,14 @@ export const CONVERGENCE_CONSTANTS = {
   MIN_IMPACT_COVERAGE: 0.7,
   /** Issue transition stability window (rounds) */
   ISSUE_STABILITY_WINDOW: 2,
+  /** Expected total issues per category for coverage calculation */
+  CATEGORY_TOTALS: {
+    SECURITY: 8,
+    CORRECTNESS: 6,
+    RELIABILITY: 4,
+    MAINTAINABILITY: 4,
+    PERFORMANCE: 4
+  } as const,
 } as const;
 
 // =============================================================================
