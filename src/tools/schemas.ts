@@ -93,6 +93,17 @@ export const DynamicRoleConfigSchema = z.object({
   }).optional()
 }).optional();
 
+// [ENH: LLM-EVAL] LLM-based evaluation configuration
+export const LLMEvalConfigSchema = z.object({
+  enabled: z.boolean().default(false).describe('Enable LLM-based evaluation (vs pattern matching only)'),
+  convergenceEval: z.boolean().optional().default(true).describe('Use LLM for convergence quality assessment'),
+  severityEval: z.boolean().optional().default(true).describe('Use LLM for severity classification'),
+  edgeCaseEval: z.boolean().optional().default(true).describe('Use LLM to verify edge case analysis quality'),
+  falsePositiveEval: z.boolean().optional().default(true).describe('Use LLM to detect false positive issues'),
+  temperature: z.number().optional().default(0.3).describe('Temperature for evaluations (lower = more deterministic)'),
+  fallbackToPatterns: z.boolean().optional().default(true).describe('Fall back to pattern matching if LLM fails')
+}).optional();
+
 // =============================================================================
 // Session Lifecycle Schemas
 // =============================================================================
@@ -129,6 +140,10 @@ export const StartSessionSchema = z.object({
   // [ENH: DYNAMIC-ROLES] Dynamic role generation configuration
   dynamicRoleConfig: DynamicRoleConfigSchema.describe(
     'Dynamic role generation configuration. When enabled, generates customized Verifier/Critic roles based on requirements using LLM.'
+  ),
+  // [ENH: LLM-EVAL] LLM-based evaluation configuration
+  llmEvalConfig: LLMEvalConfigSchema.describe(
+    'LLM-based evaluation configuration. When enabled, uses LLM reasoning for convergence, severity, edge case, and false positive evaluation.'
   )
 });
 

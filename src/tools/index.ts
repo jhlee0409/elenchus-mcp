@@ -21,6 +21,7 @@ import { pipelineTools } from './pipeline-tools.js';
 import { safeguardsTools } from './safeguards-tools.js';
 import { optimizationTools } from './optimization-tools.js';
 import { dynamicRoleTools } from './dynamic-roles.js';
+import { llmEvalTools } from './llm-eval-tools.js';
 
 // Re-export individual handlers for direct imports
 export { startSession, getContext, submitRound, endSession } from './session-lifecycle.js';
@@ -49,4 +50,5 @@ export const tools = {
   ...safeguardsTools,
   ...optimizationTools,
   ...dynamicRoleTools,
+  ...llmEvalTools,
 };

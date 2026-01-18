@@ -105,6 +105,7 @@ import {
   SubmitRoundSchema,
   EndSessionSchema
 } from './schemas.js';
+import { DISPLAY_CONSTANTS, ROLE_CONSTANTS, DIFFERENTIAL_CONSTANTS } from '../config/constants.js';
 
 // =============================================================================
 // Internal Helpers
@@ -150,7 +151,7 @@ function generateProactiveContextSummary(session: Session): ProactiveContextSumm
       );
       if (unreviewedCallers.length > 0) {
         impactRecommendations.push(
-          `Issue ${issue.id} affects ${unreviewedCallers.length} unreviewed files: ${unreviewedCallers.slice(0, 2).map(c => c.file).join(', ')}`
+          `Issue ${issue.id} affects ${unreviewedCallers.length} unreviewed files: ${unreviewedCallers.slice(0, DISPLAY_CONSTANTS.MAX_UNREVIEWED_CALLERS_SHOWN).map(c => c.file).join(', ')}`
         );
       }
     }
@@ -197,8 +198,8 @@ function generateProactiveContextSummary(session: Session): ProactiveContextSumm
 
   return {
     focusAreas,
-    unreviewedFiles: unreviewedFiles.slice(0, 5),
-    impactRecommendations: impactRecommendations.slice(0, 3),
+    unreviewedFiles: unreviewedFiles.slice(0, DISPLAY_CONSTANTS.MAX_UNREVIEWED_FILES_SHOWN),
+    impactRecommendations: impactRecommendations.slice(0, DISPLAY_CONSTANTS.MAX_IMPACT_RECOMMENDATIONS_SHOWN),
     edgeCaseGaps,
     recommendations
   };
@@ -280,6 +281,19 @@ export async function startSession(
   // [ENH: ONE-SHOT] Set verification mode on session
   if (args.verificationMode) {
     session.verificationMode = args.verificationMode;
+  }
+
+  // [ENH: LLM-EVAL] Set LLM evaluation config on session
+  if (args.llmEvalConfig?.enabled) {
+    session.llmEvalConfig = {
+      enabled: true,
+      convergenceEval: args.llmEvalConfig.convergenceEval ?? true,
+      severityEval: args.llmEvalConfig.severityEval ?? true,
+      edgeCaseEval: args.llmEvalConfig.edgeCaseEval ?? true,
+      falsePositiveEval: args.llmEvalConfig.falsePositiveEval ?? true,
+      temperature: args.llmEvalConfig.temperature ?? 0.3,
+      fallbackToPatterns: args.llmEvalConfig.fallbackToPatterns ?? true,
+    };
   }
 
   // Initialize context
@@ -452,10 +466,10 @@ export async function startSession(
       expectedRole: roleState.currentExpectedRole,
       config: roleState.config,
       verifierGuidelines: {
-        mustDo: getRoleDefinition('verifier').mustDo.slice(0, 3),
-        mustNotDo: getRoleDefinition('verifier').mustNotDo.slice(0, 3)
+        mustDo: getRoleDefinition('verifier').mustDo.slice(0, ROLE_CONSTANTS.MAX_GUIDELINES_SHOWN),
+        mustNotDo: getRoleDefinition('verifier').mustNotDo.slice(0, ROLE_CONSTANTS.MAX_GUIDELINES_SHOWN)
       },
-      firstRolePrompt: verifierPrompt.systemPrompt.slice(0, 500) + '...'
+      firstRolePrompt: verifierPrompt.systemPrompt.slice(0, DISPLAY_CONSTANTS.MAX_ROLE_PROMPT_PREVIEW) + '...'
     },
     verificationMode: args.verificationMode ? {
       mode: args.verificationMode.mode || 'standard',
@@ -470,7 +484,7 @@ export async function startSession(
       totalFindings: preAnalysisResults.reduce((sum, r) => sum + r.findings.length, 0),
       filesWithFindings: preAnalysisResults.length,
       summary: preAnalysisSummary,
-      details: preAnalysisResults.slice(0, 10)
+      details: preAnalysisResults.slice(0, DISPLAY_CONSTANTS.MAX_PREANALYSIS_FILES)
     },
     differential: diffResult ? {
       enabled: true,
@@ -519,7 +533,7 @@ export async function startSession(
             ageSeconds: r.ageSeconds,
             tokensSaved: r.tokensSaved
           }))
-          .slice(0, 20),
+          .slice(0, DISPLAY_CONSTANTS.MAX_CACHED_FILES_SHOWN),
         guidance: `${savings.cachedFiles} files have cached verification results. Focus on the ${savings.uncachedFiles} uncached files for detailed verification.`
       };
     })() : (cacheConfig.enabled ? {
@@ -536,7 +550,7 @@ export async function startSession(
         tokensAfter: chunkingResult.tokenSavings.after,
         savingsPercentage: chunkingResult.tokenSavings.percentage + '%'
       },
-      chunks: chunkingResult.chunks.slice(0, 15).map(c => ({
+      chunks: chunkingResult.chunks.slice(0, DISPLAY_CONSTANTS.MAX_CHUNKS_SHOWN).map(c => ({
         id: c.id,
         filePath: c.filePath,
         symbols: c.symbols.map(s => s.name),
@@ -563,7 +577,7 @@ export async function startSession(
         updatedSession?.context.files || new Map(),
         pipelineState.currentTier,
         pipelineConfig
-      ).slice(0, 10),
+      ).slice(0, DISPLAY_CONSTANTS.MAX_TIER_FILES_SHOWN),
       guidance: `Starting with ${pipelineState.currentTier} tier. ${pipelineConfig.autoEscalate ? 'Will auto-escalate based on findings.' : 'Manual escalation only.'}`
     } : (pipelineConfig.enabled ? {
       enabled: true,
@@ -778,7 +792,7 @@ export async function submitRound(
         conciseMode: useConciseMode,
         round: nextRoundNumber,
         outputFormat: useConciseMode ? 'CONCISE (<500 words)' : 'COMPREHENSIVE',
-        mustDo: getRoleDefinition(nextRole as VerifierRole).mustDo.slice(0, 3),
+        mustDo: getRoleDefinition(nextRole as VerifierRole).mustDo.slice(0, ROLE_CONSTANTS.MAX_GUIDELINES_SHOWN),
         checklist: nextRolePrompt.checklist
       } : undefined
     }) as RoleComplianceResultWithGuidance,
