@@ -21,6 +21,7 @@ import {
   detectVerbosity
 } from '../utils/user-preferences.js';
 import { detectLanguage, type SupportedLanguage } from '../roles/i18n-prompts.js';
+import { SESSION_CONSTANTS } from '../config/constants.js';
 // [FIX: SCHEMA-03] Use centralized schemas
 import {
   IssueStorageSchema,
@@ -114,7 +115,7 @@ function isValidSessionId(sessionId: string): boolean {
   return /^[a-zA-Z0-9_-]+$/.test(sessionId) &&
          !sessionId.includes('..') &&
          sessionId.length > 0 &&
-         sessionId.length <= 100;
+         sessionId.length <= SESSION_CONSTANTS.MAX_SESSION_ID_LENGTH;
 }
 
 /**
@@ -122,7 +123,7 @@ function isValidSessionId(sessionId: string): boolean {
  */
 function generateSessionId(target: string): string {
   const date = new Date().toISOString().split('T')[0];
-  const targetSlug = target.replace(/[^a-zA-Z0-9]/g, '-').slice(0, 30);
+  const targetSlug = target.replace(/[^a-zA-Z0-9]/g, '-').slice(0, SESSION_CONSTANTS.MAX_TARGET_SLUG_LENGTH);
   const random = Math.random().toString(36).slice(2, 8);
   return `${date}_${targetSlug}_${random}`;
 }
@@ -171,7 +172,7 @@ export async function createSession(
       language: detectedLanguage,
       autonomyLevel: detectedAutonomy,
       verbosity: detectedVerbosity,
-      detectedFrom: requirements.slice(0, 100)
+      detectedFrom: requirements.slice(0, SESSION_CONSTANTS.MAX_PREFERENCE_DETECTION_CHARS)
     }
   };
 
@@ -552,7 +553,7 @@ export interface StaleIssueInfo {
   lastMentionedRound: number;
 }
 
-export function detectStaleIssues(session: Session, staleThreshold: number = 3): StaleIssueInfo[] {
+export function detectStaleIssues(session: Session, staleThreshold: number = SESSION_CONSTANTS.DEFAULT_STALE_THRESHOLD): StaleIssueInfo[] {
   const staleIssues: StaleIssueInfo[] = [];
   const currentRound = session.currentRound;
 

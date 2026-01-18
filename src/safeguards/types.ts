@@ -4,6 +4,7 @@
  */
 
 import { Severity, IssueCategory } from '../types/index.js';
+import { SAFEGUARDS_CONSTANTS } from '../config/constants.js';
 
 // =============================================================================
 // Periodic Full Verification
@@ -306,46 +307,46 @@ export interface QualityAction {
 
 export const DEFAULT_PERIODIC_CONFIG: PeriodicVerificationConfig = {
   enabled: true,
-  incrementalThreshold: 5,
-  maxHoursSinceFull: 24,
-  confidenceFloor: 0.6,
-  alwaysFullPatterns: ['**/auth/**', '**/security/**', '**/payment/**']
+  incrementalThreshold: SAFEGUARDS_CONSTANTS.INCREMENTAL_THRESHOLD,
+  maxHoursSinceFull: SAFEGUARDS_CONSTANTS.MAX_HOURS_SINCE_FULL,
+  confidenceFloor: SAFEGUARDS_CONSTANTS.MIN_ACCEPTABLE_CONFIDENCE,
+  alwaysFullPatterns: [...SAFEGUARDS_CONSTANTS.ALWAYS_FULL_PATTERNS]
 };
 
 export const DEFAULT_CONFIDENCE_CONFIG: ConfidenceConfig = {
   weights: {
-    freshness: 0.25,
-    contextMatch: 0.25,
-    coverage: 0.30,
-    historicalAccuracy: 0.20
+    freshness: SAFEGUARDS_CONSTANTS.CONFIDENCE_WEIGHTS.FRESHNESS,
+    contextMatch: SAFEGUARDS_CONSTANTS.CONFIDENCE_WEIGHTS.CONTEXT_MATCH,
+    coverage: SAFEGUARDS_CONSTANTS.CONFIDENCE_WEIGHTS.COVERAGE,
+    historicalAccuracy: SAFEGUARDS_CONSTANTS.CONFIDENCE_WEIGHTS.HISTORICAL_ACCURACY
   },
-  minimumAcceptable: 0.7,
+  minimumAcceptable: SAFEGUARDS_CONSTANTS.MINIMUM_ACCEPTABLE_CONFIDENCE,
   cache: {
-    maxAgeHours: 24,
-    decayPerHour: 0.02,
-    minimumConfidence: 0.5
+    maxAgeHours: SAFEGUARDS_CONSTANTS.CACHE.MAX_AGE_HOURS,
+    decayPerHour: SAFEGUARDS_CONSTANTS.CACHE.DECAY_PER_HOUR,
+    minimumConfidence: SAFEGUARDS_CONSTANTS.CACHE.MINIMUM_CONFIDENCE
   },
   chunk: {
-    boundaryPenalty: 0.15,
-    minDependencyCoverage: 0.8
+    boundaryPenalty: SAFEGUARDS_CONSTANTS.CHUNK.BOUNDARY_PENALTY,
+    minDependencyCoverage: SAFEGUARDS_CONSTANTS.CHUNK.MIN_DEPENDENCY_COVERAGE
   },
   tier: {
-    screenWeight: 0.4,
-    focusedWeight: 0.7,
-    exhaustiveWeight: 1.0,
-    skippedPenalty: 0.2
+    screenWeight: SAFEGUARDS_CONSTANTS.TIER_WEIGHTS.SCREEN,
+    focusedWeight: SAFEGUARDS_CONSTANTS.TIER_WEIGHTS.FOCUSED,
+    exhaustiveWeight: SAFEGUARDS_CONSTANTS.TIER_WEIGHTS.EXHAUSTIVE,
+    skippedPenalty: SAFEGUARDS_CONSTANTS.TIER_WEIGHTS.SKIPPED_PENALTY
   }
 };
 
 export const DEFAULT_SAMPLING_CONFIG: SamplingConfig = {
   enabled: true,
-  rate: 10,
-  minSamples: 2,
-  maxSamples: 20,
+  rate: SAFEGUARDS_CONSTANTS.DEFAULT_SAMPLING_RATE,
+  minSamples: SAFEGUARDS_CONSTANTS.MIN_SAMPLES,
+  maxSamples: SAFEGUARDS_CONSTANTS.MAX_SAMPLES,
   strategy: 'RISK_WEIGHTED',
   alwaysSamplePatterns: ['**/auth/**', '**/security/**'],
   neverSamplePatterns: ['**/*.test.*', '**/__tests__/**'],
-  historicalBoost: 1.5
+  historicalBoost: SAFEGUARDS_CONSTANTS.SAMPLING.HISTORICAL_BOOST
 };
 
 // =============================================================================
@@ -372,17 +373,11 @@ export interface SafeguardsAutoActivationConfig {
 
 export const DEFAULT_AUTO_ACTIVATION_CONFIG: SafeguardsAutoActivationConfig = {
   autoEnableWithOptimizations: true,
-  differentialSamplingRate: 15,  // Higher sampling when differential is active
-  cacheSamplingRate: 12,         // Moderate increase for cache
-  pipelineSamplingRate: 10,      // Standard for pipeline
-  extendedAlwaysFullPatterns: [
-    '**/utils/**',
-    '**/helpers/**',
-    '**/common/**',
-    '**/shared/**',
-    '**/core/**'
-  ],
-  optimizedIncrementalThreshold: 3  // More frequent full verification when optimized
+  differentialSamplingRate: SAFEGUARDS_CONSTANTS.SAMPLING.DIFFERENTIAL_RATE,
+  cacheSamplingRate: SAFEGUARDS_CONSTANTS.SAMPLING.CACHE_RATE,
+  pipelineSamplingRate: SAFEGUARDS_CONSTANTS.SAMPLING.PIPELINE_RATE,
+  extendedAlwaysFullPatterns: [...SAFEGUARDS_CONSTANTS.EXTENDED_ALWAYS_FULL_PATTERNS],
+  optimizedIncrementalThreshold: SAFEGUARDS_CONSTANTS.SAMPLING.OPTIMIZED_INCREMENTAL_THRESHOLD
 };
 
 /**

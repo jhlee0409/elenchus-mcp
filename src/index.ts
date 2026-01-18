@@ -22,6 +22,7 @@ import {
 import { tools } from './tools/index.js';
 import { listSessions, getSession } from './state/session.js';
 import { generatePromptContent } from './prompts/index.js';
+import { APP_CONSTANTS } from './config/constants.js';
 
 // =============================================================================
 // Server Setup
@@ -29,8 +30,8 @@ import { generatePromptContent } from './prompts/index.js';
 
 const server = new Server(
   {
-    name: 'elenchus-mcp',
-    version: '1.2.0'
+    name: APP_CONSTANTS.NAME,
+    version: APP_CONSTANTS.VERSION
   },
   {
     capabilities: {
@@ -415,5 +416,5 @@ async function main() {
 main().catch((error) => {
   console.error('Fatal error:', error);
   // [FIX: REL-02] Give a moment for error logging before exit
-  setTimeout(() => process.exit(1), 100);
+  setTimeout(() => process.exit(1), APP_CONSTANTS.SHUTDOWN_TIMEOUT_MS);
 });

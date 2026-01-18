@@ -4,6 +4,7 @@
  */
 
 import { IssueCategory, Severity } from '../types/index.js';
+import { CACHE_CONSTANTS } from '../config/constants.js';
 
 /**
  * Cache key components for unique identification
@@ -101,9 +102,9 @@ export interface CacheLookupResult {
  */
 export const DEFAULT_CACHE_CONFIG: CacheConfig = {
   enabled: false,
-  ttlSeconds: 24 * 60 * 60,  // 24 hours
-  maxEntries: 1000,
-  minConfidence: 'MEDIUM',
+  ttlSeconds: CACHE_CONSTANTS.DEFAULT_TTL_SECONDS,
+  maxEntries: CACHE_CONSTANTS.MAX_CACHE_ENTRIES,
+  minConfidence: CACHE_CONSTANTS.DEFAULT_MIN_CONFIDENCE,
   cacheIssues: true,
   cacheCleanResults: true,
   storagePath: ''  // Will be set at runtime

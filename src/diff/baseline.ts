@@ -10,6 +10,7 @@ import { VerificationBaseline, ProjectIndex } from './types.js';
 import { Session } from '../types/index.js';
 import { computeFileHash } from './hash.js';
 import { StoragePaths } from '../config/index.js';
+import { BASELINE_CONSTANTS } from '../config/constants.js';
 
 // Baselines storage (client-agnostic, configurable via ELENCHUS_DATA_DIR)
 const BASELINES_DIR = StoragePaths.baselines;
@@ -21,7 +22,7 @@ export function getProjectHash(projectPath: string): string {
   return createHash('sha256')
     .update(projectPath)
     .digest('hex')
-    .slice(0, 16);
+    .slice(0, BASELINE_CONSTANTS.PROJECT_HASH_LENGTH);
 }
 
 /**
@@ -99,7 +100,7 @@ async function updateProjectIndex(
     verdict: baseline.verdict,
     target: baseline.target
   });
-  index.history = index.history.slice(0, 10);
+  index.history = index.history.slice(0, BASELINE_CONSTANTS.MAX_HISTORY_ENTRIES);
 
   await fs.writeFile(indexPath, JSON.stringify(index, null, 2));
 }

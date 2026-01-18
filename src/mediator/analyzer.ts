@@ -14,6 +14,7 @@ import {
   ClassInfo
 } from './types.js';
 import { Deque } from '../utils/data-structures.js';
+import { FILE_ANALYSIS_CONSTANTS } from '../config/constants.js';
 
 // =============================================================================
 // Main Analysis Functions
@@ -27,7 +28,7 @@ export async function analyzeFile(filePath: string): Promise<DependencyNode | nu
     const content = await fs.readFile(filePath, 'utf-8');
     const ext = path.extname(filePath);
 
-    if (!['.ts', '.tsx', '.js', '.jsx', '.mjs'].includes(ext)) {
+    if (!(FILE_ANALYSIS_CONSTANTS.SUPPORTED_EXTENSIONS as readonly string[]).includes(ext)) {
       return null;
     }
 
@@ -439,8 +440,7 @@ function resolveImportPath(
   }
 
   // Try extensions
-  const extensions = ['', '.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.js'];
-  for (const ext of extensions) {
+  for (const ext of FILE_ANALYSIS_CONSTANTS.IMPORT_RESOLUTION_EXTENSIONS) {
     const tryPath = resolved + ext;
     if (availableFiles.includes(tryPath)) {
       return tryPath;

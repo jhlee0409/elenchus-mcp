@@ -16,6 +16,7 @@ import {
 } from './types.js';
 import { StoragePaths } from '../config/index.js';
 import { IssueCategory } from '../types/index.js';
+import { CACHE_CONSTANTS } from '../config/constants.js';
 
 // Default cache directory (client-agnostic, configurable via ELENCHUS_DATA_DIR)
 const DEFAULT_CACHE_DIR = StoragePaths.cache;
@@ -59,8 +60,8 @@ export function generateCacheKey(
   category?: IssueCategory
 ): CacheKey {
   return {
-    contentHash: createHash('sha256').update(content).digest('hex').slice(0, 16),
-    requirementsHash: createHash('sha256').update(requirements).digest('hex').slice(0, 8),
+    contentHash: createHash('sha256').update(content).digest('hex').slice(0, CACHE_CONSTANTS.CONTENT_HASH_LENGTH),
+    requirementsHash: createHash('sha256').update(requirements).digest('hex').slice(0, CACHE_CONSTANTS.REQUIREMENTS_HASH_LENGTH),
     category
   };
 }
@@ -122,8 +123,8 @@ export async function lookupCache(
     stats.hitCount++;
     updateHitRate();
 
-    // Estimate tokens saved (rough estimate: ~4 chars per token)
-    const tokensSaved = Math.round(content.length / 4);
+    // Estimate tokens saved
+    const tokensSaved = Math.round(content.length / CACHE_CONSTANTS.CHARS_PER_TOKEN);
     stats.totalTokensSaved += tokensSaved;
 
     return {

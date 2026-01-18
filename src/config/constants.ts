@@ -6,6 +6,19 @@
  */
 
 // =============================================================================
+// Application Metadata
+// =============================================================================
+
+export const APP_CONSTANTS = {
+  /** Application name */
+  NAME: 'elenchus-mcp',
+  /** Current version - UPDATE THIS ON RELEASE */
+  VERSION: '1.2.0',
+  /** Graceful shutdown timeout in milliseconds */
+  SHUTDOWN_TIMEOUT_MS: 100,
+} as const;
+
+// =============================================================================
 // Session & Verification Limits
 // =============================================================================
 
@@ -24,6 +37,12 @@ export const SESSION_CONSTANTS = {
   MAX_SESSION_ID_LENGTH: 100,
   /** Maximum rounds for re-verification */
   MAX_RE_VERIFY_ROUNDS: 6,
+  /** Maximum characters for target slug in session ID */
+  MAX_TARGET_SLUG_LENGTH: 30,
+  /** Default stale issue threshold (rounds without mention) */
+  DEFAULT_STALE_THRESHOLD: 3,
+  /** Maximum characters to keep for user preference detection reference */
+  MAX_PREFERENCE_DETECTION_CHARS: 100,
 } as const;
 
 // =============================================================================
@@ -35,6 +54,8 @@ export const DIFFERENTIAL_CONSTANTS = {
   MAX_AFFECTED_DEPTH: 2,
   /** Default base reference for diff */
   DEFAULT_BASE_REF: 'last-verified',
+  /** Maximum changed files to process */
+  MAX_CHANGED_FILES: 20,
 } as const;
 
 // =============================================================================
@@ -48,6 +69,12 @@ export const CACHE_CONSTANTS = {
   MAX_CACHE_ENTRIES: 1000,
   /** Default minimum confidence to use cache */
   DEFAULT_MIN_CONFIDENCE: 'MEDIUM' as const,
+  /** Content hash substring length */
+  CONTENT_HASH_LENGTH: 16,
+  /** Requirements hash substring length */
+  REQUIREMENTS_HASH_LENGTH: 8,
+  /** Estimated characters per token for savings calculation */
+  CHARS_PER_TOKEN: 4,
 } as const;
 
 // =============================================================================
@@ -61,6 +88,18 @@ export const CHUNKING_CONSTANTS = {
   MAX_RELATED_DEPTH: 1,
   /** Minimum symbol size to chunk separately */
   MIN_SYMBOL_TOKENS_TO_CHUNK: 50,
+  /** Symbol type priorities for sorting */
+  SYMBOL_TYPE_PRIORITY: {
+    class: 1,
+    function: 2,
+    method: 2,
+    interface: 3,
+    type: 3,
+    constant: 4,
+    variable: 5,
+    export: 6,
+    import: 7,
+  } as const,
 } as const;
 
 // =============================================================================
@@ -69,9 +108,40 @@ export const CHUNKING_CONSTANTS = {
 
 export const PIPELINE_CONSTANTS = {
   /** Maximum total tokens across all tiers */
-  MAX_TOTAL_TOKENS: 50000,
+  MAX_TOTAL_TOKENS: 100000,
   /** Default starting tier */
   DEFAULT_START_TIER: 'screen' as const,
+  /** Tier order for escalation comparison */
+  TIER_ORDER: ['screen', 'focused', 'exhaustive'] as const,
+  /** Token budget warning threshold (percentage) */
+  TOKEN_BUDGET_WARNING_THRESHOLD: 0.8,
+  /** Token budget exceeded threshold (percentage) */
+  TOKEN_BUDGET_EXCEEDED_THRESHOLD: 1.0,
+  /** Screen tier configuration */
+  SCREEN_TIER: {
+    BUDGET_MULTIPLIER: 0.3,
+    MIN_SEVERITY: 'HIGH' as const,
+    MAX_FILES_PER_CATEGORY: 5,
+  },
+  /** Focused tier configuration */
+  FOCUSED_TIER: {
+    BUDGET_MULTIPLIER: 0.6,
+    MIN_SEVERITY: 'MEDIUM' as const,
+    MAX_FILES_PER_CATEGORY: 10,
+  },
+  /** Exhaustive tier configuration */
+  EXHAUSTIVE_TIER: {
+    BUDGET_MULTIPLIER: 1.0,
+    MIN_SEVERITY: 'LOW' as const,
+    MAX_FILES_PER_CATEGORY: 50,
+  },
+  /** Default escalation rules */
+  ESCALATION: {
+    CRITICAL_THRESHOLD: 1,
+    ISSUES_THRESHOLD: 3,
+  },
+  /** Default exhaustive patterns */
+  EXHAUSTIVE_PATTERNS: ['**/auth/**', '**/security/**', '**/payment/**'],
 } as const;
 
 // =============================================================================
@@ -87,10 +157,77 @@ export const SAFEGUARDS_CONSTANTS = {
   DEFAULT_SAMPLING_RATE: 10,
   /** Minimum number of files to sample */
   MIN_SAMPLES: 2,
+  /** Maximum number of files to sample */
+  MAX_SAMPLES: 20,
   /** Minimum acceptable confidence score */
   MIN_ACCEPTABLE_CONFIDENCE: 0.6,
   /** Confidence decay rate per day */
   CONFIDENCE_DECAY_RATE: 0.1,
+  /** Estimated missed issues threshold for warning */
+  ESTIMATED_MISSED_THRESHOLD: 3,
+  /** High risk files threshold for warning */
+  HIGH_RISK_FILES_THRESHOLD: 5,
+  /** High risk threshold value */
+  HIGH_RISK_THRESHOLD: 0.7,
+  /** Confidence weights */
+  CONFIDENCE_WEIGHTS: {
+    FRESHNESS: 0.25,
+    CONTEXT_MATCH: 0.25,
+    COVERAGE: 0.30,
+    HISTORICAL_ACCURACY: 0.20,
+  },
+  /** Minimum acceptable confidence */
+  MINIMUM_ACCEPTABLE_CONFIDENCE: 0.7,
+  /** Cache settings */
+  CACHE: {
+    MAX_AGE_HOURS: 24,
+    DECAY_PER_HOUR: 0.02,
+    MINIMUM_CONFIDENCE: 0.5,
+  },
+  /** Chunk settings */
+  CHUNK: {
+    BOUNDARY_PENALTY: 0.15,
+    MIN_DEPENDENCY_COVERAGE: 0.8,
+  },
+  /** Tier weights for confidence calculation */
+  TIER_WEIGHTS: {
+    SCREEN: 0.4,
+    FOCUSED: 0.7,
+    EXHAUSTIVE: 1.0,
+    SKIPPED_PENALTY: 0.2,
+  },
+  /** Sampling settings */
+  SAMPLING: {
+    HISTORICAL_BOOST: 1.5,
+    DIFFERENTIAL_RATE: 15,
+    CACHE_RATE: 12,
+    PIPELINE_RATE: 10,
+    OPTIMIZED_INCREMENTAL_THRESHOLD: 3,
+  },
+  /** Quality score calculation weights */
+  QUALITY_WEIGHTS: {
+    CONFIDENCE: 0.4,
+    COVERAGE: 0.3,
+    INCREMENTAL_DRIFT: 0.2,
+    SAMPLING_PRODUCTIVITY: 0.1,
+  },
+  /** Quality level thresholds */
+  QUALITY_THRESHOLDS: {
+    EXCELLENT: 0.9,
+    GOOD: 0.8,
+    ACCEPTABLE: 0.7,
+    POOR: 0.5,
+  },
+  /** Always full verification patterns */
+  ALWAYS_FULL_PATTERNS: ['**/auth/**', '**/security/**', '**/payment/**'],
+  /** Extended always full patterns (for auto-activation) */
+  EXTENDED_ALWAYS_FULL_PATTERNS: [
+    '**/utils/**',
+    '**/helpers/**',
+    '**/common/**',
+    '**/shared/**',
+    '**/core/**',
+  ],
 } as const;
 
 // =============================================================================
@@ -119,6 +256,14 @@ export const ROLE_CONSTANTS = {
   MAX_PROMPT_PREVIEW_LENGTH: 500,
   /** Maximum guidelines to show in response */
   MAX_GUIDELINES_SHOWN: 3,
+  /** Compliance scoring */
+  COMPLIANCE_SCORE: {
+    BASE: 100,
+    ERROR_PENALTY: 20,
+    WARNING_PENALTY: 5,
+    MIN_SCORE: 0,
+    MAX_SCORE: 100,
+  },
 } as const;
 
 // =============================================================================
@@ -157,6 +302,20 @@ export const DISPLAY_CONSTANTS = {
   MAX_CHUNKS_SHOWN: 15,
   /** Maximum files for tier to show */
   MAX_TIER_FILES_SHOWN: 10,
+  /** Maximum recommended actions to show */
+  MAX_RECOMMENDED_ACTIONS: 3,
+  /** Maximum unreviewed callers to show */
+  MAX_UNREVIEWED_CALLERS_SHOWN: 2,
+  /** Maximum unreviewed files to show */
+  MAX_UNREVIEWED_FILES_SHOWN: 5,
+  /** Maximum impact recommendations to show */
+  MAX_IMPACT_RECOMMENDATIONS_SHOWN: 3,
+  /** Maximum initial lines to scan for signatures */
+  MAX_INITIAL_LINES_SCAN: 20,
+  /** Maximum signatures to show */
+  MAX_SIGNATURES_SHOWN: 15,
+  /** Context truncation limit */
+  CONTEXT_TRUNCATION_LIMIT: 2000,
 } as const;
 
 // =============================================================================
@@ -170,6 +329,12 @@ export const ISSUE_CONSTANTS = {
   MAX_DESCRIPTION_LENGTH: 2000,
   /** Maximum evidence length */
   MAX_EVIDENCE_LENGTH: 1000,
+  /** Risk level thresholds for total affected files */
+  RISK_LEVEL: {
+    CRITICAL_THRESHOLD: 10,
+    HIGH_THRESHOLD: 5,
+    MEDIUM_THRESHOLD: 2,
+  },
 } as const;
 
 // =============================================================================
@@ -183,4 +348,90 @@ export const MEDIATOR_CONSTANTS = {
   MAX_AFFECTED_FILES: 50,
   /** Intervention priority levels */
   PRIORITY_LEVELS: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const,
+  /** Critical file threshold (max importance * factor) */
+  CRITICAL_THRESHOLD_FACTOR: 0.5,
+  /** Max affected files to display */
+  MAX_AFFECTED_FILES_DISPLAY: 10,
+  /** Max critical files to display */
+  MAX_CRITICAL_FILES_DISPLAY: 5,
+  /** Min round to start coverage check */
+  COVERAGE_CHECK_MIN_ROUND: 3,
+  /** Min round for low coverage check */
+  LOW_COVERAGE_CHECK_MIN_ROUND: 5,
+  /** Low coverage threshold (50%) */
+  LOW_COVERAGE_THRESHOLD: 0.5,
+  /** Scope drift threshold (50%) */
+  DRIFT_THRESHOLD: 0.5,
+  /** Min files for drift check */
+  MIN_FILES_FOR_DRIFT: 3,
+  /** Default max dependency depth */
+  DEFAULT_MAX_DEPTH: 100,
+  /** Side effect warning threshold */
+  SIDE_EFFECT_WARNING_THRESHOLD: 5,
+  /** Ripple effect max depth */
+  RIPPLE_EFFECT_MAX_DEPTH: 3,
+  /** File importance threshold */
+  FILE_IMPORTANCE_THRESHOLD: 3,
+  /** Maximum callers to track in impact analysis */
+  MAX_CALLERS_TRACKED: 10,
+  /** Maximum dependencies to track in impact analysis */
+  MAX_DEPENDENCIES_TRACKED: 5,
+  /** Suspicion score thresholds for quick agreement detection */
+  QUICK_AGREEMENT: {
+    MIN_SUSPICION_SCORE: 50,
+    WARNING_SCORE: 70,
+    AGREEMENT_CONTRIBUTION: 40,
+    SHORT_RESPONSE_CONTRIBUTION: 30,
+    ALL_VALID_CONTRIBUTION: 30,
+    MIN_RESPONSE_LENGTH: 300,
+    MIN_ISSUES_FOR_ALL_VALID: 2,
+  },
+} as const;
+
+// =============================================================================
+// File Analysis Configuration
+// =============================================================================
+
+export const FILE_ANALYSIS_CONSTANTS = {
+  /** Supported file extensions for analysis */
+  SUPPORTED_EXTENSIONS: ['.ts', '.tsx', '.js', '.jsx', '.mjs'] as const,
+  /** Extension attempts for import resolution */
+  IMPORT_RESOLUTION_EXTENSIONS: ['', '.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.js'] as const,
+  /** File importance calculation: dependents weight multiplier */
+  DEPENDENTS_WEIGHT: 2,
+} as const;
+
+// =============================================================================
+// Baseline Configuration
+// =============================================================================
+
+export const BASELINE_CONSTANTS = {
+  /** Hash substring length for project hash */
+  PROJECT_HASH_LENGTH: 16,
+  /** Maximum history entries to keep */
+  MAX_HISTORY_ENTRIES: 10,
+} as const;
+
+// =============================================================================
+// Verification Mode Defaults
+// =============================================================================
+
+export const VERIFICATION_MODE_CONSTANTS = {
+  /** Default verification mode */
+  DEFAULT_MODE: 'standard' as const,
+  /** Mode configurations */
+  MODES: {
+    STANDARD: {
+      MIN_ROUNDS: 3,
+      CRITIC_REQUIRED: true,
+    },
+    FAST_TRACK: {
+      MIN_ROUNDS: 1,
+      CRITIC_OPTIONAL: true,
+    },
+    SINGLE_PASS: {
+      MIN_ROUNDS: 1,
+      CRITIC_REQUIRED: false,
+    },
+  },
 } as const;

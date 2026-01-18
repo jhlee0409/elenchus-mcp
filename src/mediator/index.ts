@@ -26,24 +26,12 @@ import {
 } from './analyzer.js';
 import { Session, Issue, IssueImpactAnalysis, ImpactedCode } from '../types/index.js';
 import { Deque } from '../utils/data-structures.js';
+import { MEDIATOR_CONSTANTS } from '../config/constants.js';
 
 /**
- * [FIX: MNT-01] Mediator configuration constants
+ * [FIX: MNT-01] Mediator configuration - uses centralized constants
  */
-const MEDIATOR_CONFIG = {
-  CRITICAL_THRESHOLD_FACTOR: 0.5,    // Critical file threshold (max importance * factor)
-  MAX_AFFECTED_FILES_DISPLAY: 10,    // Max affected files to display
-  MAX_CRITICAL_FILES_DISPLAY: 5,     // Max critical files to display
-  COVERAGE_CHECK_MIN_ROUND: 3,       // Min round to start coverage check
-  LOW_COVERAGE_CHECK_MIN_ROUND: 5,   // Min round for low coverage check
-  LOW_COVERAGE_THRESHOLD: 0.5,       // Low coverage threshold (50%)
-  DRIFT_THRESHOLD: 0.5,              // Scope drift threshold (50%)
-  MIN_FILES_FOR_DRIFT: 3,            // Min files for drift check
-  DEFAULT_MAX_DEPTH: 100,            // Default max dependency depth
-  SIDE_EFFECT_WARNING_THRESHOLD: 5,  // Side effect warning threshold
-  RIPPLE_EFFECT_MAX_DEPTH: 3,        // Ripple effect max depth
-  FILE_IMPORTANCE_THRESHOLD: 3       // File importance threshold
-} as const;
+const MEDIATOR_CONFIG = MEDIATOR_CONSTANTS;
 
 // =============================================================================
 // Mediator State Management
