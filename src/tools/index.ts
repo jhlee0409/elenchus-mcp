@@ -19,6 +19,7 @@ import { diffTools } from './diff-tools.js';
 import { cacheTools } from './cache-tools.js';
 import { pipelineTools } from './pipeline-tools.js';
 import { safeguardsTools } from './safeguards-tools.js';
+import { optimizationTools } from './optimization-tools.js';
 
 // Re-export individual handlers for direct imports
 export { startSession, getContext, submitRound, endSession } from './session-lifecycle.js';
@@ -30,6 +31,7 @@ export { saveBaselineTool, getDiffSummaryTool, getProjectHistoryTool } from './d
 export { getCacheStatsTool, clearCacheTool } from './cache-tools.js';
 export { getPipelineStatusTool, escalateTierTool, completeTierTool } from './pipeline-tools.js';
 export { getSafeguardsStatusTool, updateConfidenceTool, recordSamplingResultTool, checkConvergenceAllowedTool } from './safeguards-tools.js';
+export { setCompressionMode, getOptimizationStats, configureOptimization, estimateSavings } from './optimization-tools.js';
 export { getSessions };
 
 // Compose all tools into a single export
@@ -42,5 +44,6 @@ export const tools = {
   ...diffTools,
   ...cacheTools,
   ...pipelineTools,
-  ...safeguardsTools
+  ...safeguardsTools,
+  ...optimizationTools
 };
