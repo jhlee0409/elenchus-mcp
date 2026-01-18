@@ -79,10 +79,21 @@ Elenchus is a **Model Context Protocol (MCP) server** that implements adversaria
 - Negative assertions for clean code
 
 ### 🔍 Automatic Impact Analysis
-- Dependency graph construction
+- **Multi-language dependency graph** (15 languages via tree-sitter)
 - Ripple effect prediction
 - Cascade depth calculation
 - Risk level assessment
+
+### 🌐 Multi-Language Support
+
+Dependency analysis powered by tree-sitter AST parsing:
+
+| Category | Languages |
+|----------|-----------|
+| Web | TypeScript, TSX, JavaScript, CSS |
+| Systems | Rust, Go, C, C++ |
+| Enterprise | Java, C# |
+| Scripting | Python, Ruby, PHP, Bash, PowerShell |
 
 ### 💾 Session Management
 - Checkpoint/rollback support
@@ -683,7 +694,7 @@ rm -rf ~/.elenchus/sessions/2026-01-17_*
 |--------|---------|
 | **Session Manager** | Create, persist, and manage verification sessions |
 | **Context Manager** | Collect and organize target files and dependencies |
-| **Mediator System** | Build dependency graphs, detect issues, trigger interventions |
+| **Mediator System** | Multi-language dependency graphs (tree-sitter), issue detection, interventions |
 | **Role Enforcement** | Ensure Verifier↔Critic alternation, validate compliance |
 | **Issue Lifecycle** | Track issue states from RAISED to RESOLVED |
 | **Pipeline** | Tiered verification (quick → standard → deep) |
@@ -827,7 +838,7 @@ elenchus-mcp/
 │   ├── prompts/           # Prompt templates
 │   ├── types/             # TypeScript interfaces
 │   ├── state/             # Session and context management
-│   ├── mediator/          # Dependency analysis
+│   ├── mediator/          # Multi-language dependency analysis (tree-sitter)
 │   ├── roles/             # Role enforcement
 │   ├── config/            # Configuration constants
 │   ├── cache/             # Response caching

@@ -79,10 +79,21 @@ Elenchus는 적대적 코드 검증을 구현하는 **Model Context Protocol (MC
 - 클린 코드에 대한 부정 단언
 
 ### 🔍 자동 영향 분석
-- 의존성 그래프 구축
+- **다중 언어 의존성 그래프** (tree-sitter 기반 15개 언어)
 - 파급 효과 예측
 - 케스케이드 깊이 계산
 - 위험 수준 평가
+
+### 🌐 다중 언어 지원
+
+tree-sitter AST 파싱 기반 의존성 분석:
+
+| 카테고리 | 언어 |
+|----------|------|
+| 웹 | TypeScript, TSX, JavaScript, CSS |
+| 시스템 | Rust, Go, C, C++ |
+| 엔터프라이즈 | Java, C# |
+| 스크립트 | Python, Ruby, PHP, Bash, PowerShell |
 
 ### 💾 세션 관리
 - 체크포인트/롤백 지원
@@ -683,7 +694,7 @@ rm -rf ~/.elenchus/sessions/2026-01-17_*
 |------|------|
 | **Session Manager** | 검증 세션 생성, 영속화, 관리 |
 | **Context Manager** | 대상 파일과 의존성 수집 및 조직 |
-| **Mediator System** | 의존성 그래프 구축, 이슈 감지, 개입 트리거 |
+| **Mediator System** | 다중 언어 의존성 그래프 (tree-sitter), 이슈 감지, 개입 트리거 |
 | **Role Enforcement** | Verifier↔Critic 교대 보장, 준수 검증 |
 | **Issue Lifecycle** | RAISED에서 RESOLVED까지 이슈 상태 추적 |
 | **Pipeline** | 계층화된 검증 (quick → standard → deep) |
@@ -827,7 +838,7 @@ elenchus-mcp/
 │   ├── prompts/           # 프롬프트 템플릿
 │   ├── types/             # TypeScript 인터페이스
 │   ├── state/             # 세션 및 컨텍스트 관리
-│   ├── mediator/          # 의존성 분석
+│   ├── mediator/          # 다중 언어 의존성 분석 (tree-sitter)
 │   ├── roles/             # 역할 강제
 │   ├── config/            # 설정 상수
 │   ├── cache/             # 응답 캐싱
