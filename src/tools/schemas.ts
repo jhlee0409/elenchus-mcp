@@ -81,6 +81,18 @@ export const SafeguardsConfigSchema = z.object({
   }).optional()
 }).optional();
 
+// [ENH: DYNAMIC-ROLES] Dynamic role generation configuration schema
+export const DynamicRoleConfigSchema = z.object({
+  enabled: z.boolean().default(false).describe('Enable dynamic role generation based on requirements'),
+  cacheEnabled: z.boolean().optional().default(true).describe('Cache generated roles for similar requirements'),
+  maxCacheSize: z.number().optional().default(100).describe('Maximum number of cached role definitions'),
+  fallbackToStatic: z.boolean().optional().default(true).describe('Fall back to static roles if generation fails'),
+  samplingParams: z.object({
+    maxTokens: z.number().optional().default(4000).describe('Maximum tokens for role generation'),
+    temperature: z.number().optional().default(0.3).describe('Temperature for role generation (lower = more deterministic)')
+  }).optional()
+}).optional();
+
 // =============================================================================
 // Session Lifecycle Schemas
 // =============================================================================
@@ -113,6 +125,10 @@ export const StartSessionSchema = z.object({
   // [ENH: SAFEGUARDS] Quality safeguards configuration
   safeguardsConfig: SafeguardsConfigSchema.describe(
     'Quality safeguards configuration. Ensures verification quality when using optimizations (caching, chunking, tiered).'
+  ),
+  // [ENH: DYNAMIC-ROLES] Dynamic role generation configuration
+  dynamicRoleConfig: DynamicRoleConfigSchema.describe(
+    'Dynamic role generation configuration. When enabled, generates customized Verifier/Critic roles based on requirements using LLM.'
   )
 });
 

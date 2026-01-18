@@ -304,6 +304,17 @@ export interface Session {
     tokenBudgetExceeded?: boolean;
     tokenBudgetWarning?: string;
   };
+  // [ENH: DYNAMIC-ROLES] Dynamic role generation state
+  dynamicRoles?: {
+    enabled: boolean;
+    domain: string;
+    domainConfidence: number;
+    verifierPurpose: string;
+    criticPurpose: string;
+    categories: string[];
+    generatedAt: string;
+    fromCache: boolean;
+  };
 }
 
 // =============================================================================

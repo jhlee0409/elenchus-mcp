@@ -4,6 +4,7 @@
  */
 
 import { IssueCategory, Severity } from '../types/index.js';
+import { PIPELINE_CONSTANTS, CONVERGENCE_CONSTANTS } from '../config/constants.js';
 
 /**
  * Verification tier levels
@@ -113,11 +114,11 @@ export const DEFAULT_TIER_CONFIGS: Record<VerificationTier, TierConfig> = {
     tier: 'screen',
     name: 'Quick Screen',
     description: 'Fast initial scan for obvious issues',
-    budgetMultiplier: 0.3,
+    budgetMultiplier: PIPELINE_CONSTANTS.SCREEN_TIER.BUDGET_MULTIPLIER,
     categories: ['SECURITY', 'CORRECTNESS'],
-    minSeverity: 'HIGH',
+    minSeverity: PIPELINE_CONSTANTS.SCREEN_TIER.MIN_SEVERITY,
     includeEdgeCases: false,
-    maxFilesPerCategory: 5,
+    maxFilesPerCategory: PIPELINE_CONSTANTS.SCREEN_TIER.MAX_FILES_PER_CATEGORY,
     checkDependencies: false,
     promptStyle: 'brief'
   },
@@ -125,11 +126,11 @@ export const DEFAULT_TIER_CONFIGS: Record<VerificationTier, TierConfig> = {
     tier: 'focused',
     name: 'Focused Review',
     description: 'Targeted review of flagged areas',
-    budgetMultiplier: 0.6,
+    budgetMultiplier: PIPELINE_CONSTANTS.FOCUSED_TIER.BUDGET_MULTIPLIER,
     categories: ['SECURITY', 'CORRECTNESS', 'RELIABILITY'],
-    minSeverity: 'MEDIUM',
+    minSeverity: PIPELINE_CONSTANTS.FOCUSED_TIER.MIN_SEVERITY,
     includeEdgeCases: false,
-    maxFilesPerCategory: 10,
+    maxFilesPerCategory: PIPELINE_CONSTANTS.FOCUSED_TIER.MAX_FILES_PER_CATEGORY,
     checkDependencies: true,
     promptStyle: 'standard'
   },
@@ -137,11 +138,11 @@ export const DEFAULT_TIER_CONFIGS: Record<VerificationTier, TierConfig> = {
     tier: 'exhaustive',
     name: 'Exhaustive Analysis',
     description: 'Complete verification with all checks',
-    budgetMultiplier: 1.0,
-    categories: ['SECURITY', 'CORRECTNESS', 'RELIABILITY', 'MAINTAINABILITY', 'PERFORMANCE'],
-    minSeverity: 'LOW',
+    budgetMultiplier: PIPELINE_CONSTANTS.EXHAUSTIVE_TIER.BUDGET_MULTIPLIER,
+    categories: CONVERGENCE_CONSTANTS.REQUIRED_CATEGORIES as unknown as IssueCategory[],
+    minSeverity: PIPELINE_CONSTANTS.EXHAUSTIVE_TIER.MIN_SEVERITY,
     includeEdgeCases: true,
-    maxFilesPerCategory: 50,
+    maxFilesPerCategory: PIPELINE_CONSTANTS.EXHAUSTIVE_TIER.MAX_FILES_PER_CATEGORY,
     checkDependencies: true,
     promptStyle: 'detailed'
   }
@@ -153,25 +154,25 @@ export const DEFAULT_TIER_CONFIGS: Record<VerificationTier, TierConfig> = {
  */
 export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
   enabled: false,
-  startTier: 'screen',
+  startTier: PIPELINE_CONSTANTS.DEFAULT_START_TIER,
   autoEscalate: true,
   escalationRules: [
     {
       condition: 'critical_found',
-      threshold: 1,
+      threshold: PIPELINE_CONSTANTS.ESCALATION.CRITICAL_THRESHOLD,
       targetTier: 'exhaustive',
       scope: 'affected'
     },
     {
       condition: 'issues_found',
-      threshold: 3,
+      threshold: PIPELINE_CONSTANTS.ESCALATION.ISSUES_THRESHOLD,
       targetTier: 'focused',
       scope: 'all'
     }
   ],
   tierConfigs: DEFAULT_TIER_CONFIGS,
-  maxTotalTokens: 100000,  // [ENH: TOKEN-OPT] Soft guideline only (doubled from 50k)
+  maxTotalTokens: PIPELINE_CONSTANTS.MAX_TOTAL_TOKENS,
   enforceTokenBudget: false,  // [ENH: TOKEN-OPT] Disabled - use prompt optimization instead
-  exhaustivePatterns: ['**/auth/**', '**/security/**', '**/payment/**'],
+  exhaustivePatterns: [...PIPELINE_CONSTANTS.EXHAUSTIVE_PATTERNS],
   qualityFirst: true  // [ENH: QUALITY-FIRST] Never sacrifice quality for token limits
 };

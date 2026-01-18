@@ -20,6 +20,7 @@ import { cacheTools } from './cache-tools.js';
 import { pipelineTools } from './pipeline-tools.js';
 import { safeguardsTools } from './safeguards-tools.js';
 import { optimizationTools } from './optimization-tools.js';
+import { dynamicRoleTools } from './dynamic-roles.js';
 
 // Re-export individual handlers for direct imports
 export { startSession, getContext, submitRound, endSession } from './session-lifecycle.js';
@@ -32,6 +33,7 @@ export { getCacheStatsTool, clearCacheTool } from './cache-tools.js';
 export { getPipelineStatusTool, escalateTierTool, completeTierTool } from './pipeline-tools.js';
 export { getSafeguardsStatusTool, updateConfidenceTool, recordSamplingResultTool, checkConvergenceAllowedTool } from './safeguards-tools.js';
 export { setCompressionMode, getOptimizationStats, configureOptimization, estimateSavings } from './optimization-tools.js';
+export { generateRoles, setDynamicRoles, GenerateRolesSchema, SetDynamicRolesSchema } from './dynamic-roles.js';
 export { getSessions };
 
 // Compose all tools into a single export
@@ -45,5 +47,6 @@ export const tools = {
   ...cacheTools,
   ...pipelineTools,
   ...safeguardsTools,
-  ...optimizationTools
+  ...optimizationTools,
+  ...dynamicRoleTools,
 };

@@ -25,6 +25,7 @@ import {
   CRITIC_ROLE
 } from './definitions.js';
 import { Session } from '../types/index.js';
+import { ROLE_CONSTANTS } from '../config/constants.js';
 import {
   shouldUseConciseMode,
   getConciseVerifierPrompt,
@@ -94,21 +95,15 @@ interface RoleState {
 const roleStates = new Map<string, RoleState>();
 
 /**
- * [FIX: MNT-01] Compliance scoring constants
+ * [FIX: MNT-01] Compliance scoring constants - uses centralized constants
  */
-const COMPLIANCE_SCORE = {
-  BASE: 100,           // Base score
-  ERROR_PENALTY: 20,   // Deduction per ERROR violation
-  WARNING_PENALTY: 5,  // Deduction per WARNING violation
-  MIN_SCORE: 0,        // Minimum score
-  MAX_SCORE: 100       // Maximum score
-} as const;
+const COMPLIANCE_SCORE = ROLE_CONSTANTS.COMPLIANCE_SCORE;
 
 const DEFAULT_CONFIG: RoleEnforcementConfig = {
-  strictMode: false,         // Default: warn only, do not reject
-  minComplianceScore: 60,    // Must be 60+ to pass
-  allowRoleSwitch: false,    // Role switch not allowed
-  requireAlternation: true   // Alternation required
+  strictMode: false,
+  minComplianceScore: ROLE_CONSTANTS.DEFAULT_MIN_COMPLIANCE_SCORE,
+  allowRoleSwitch: false,
+  requireAlternation: true
 };
 
 // =============================================================================
@@ -417,6 +412,7 @@ export function getExpectedRole(sessionId: string): VerifierRole {
  * Get role prompt
  * [ENH: CONCISE] Supports concise mode for round 2+
  * [ENH: I18N] Supports language selection
+ * [ENH: DYNAMIC-ROLES] Supports dynamic roles generated from requirements
  */
 export function getRolePrompt(
   role: VerifierRole,
@@ -424,8 +420,17 @@ export function getRolePrompt(
     round?: number;
     useConciseMode?: boolean;
     language?: SupportedLanguage;
+    sessionId?: string;  // [ENH: DYNAMIC-ROLES] Session ID for dynamic role lookup
   }
 ): RolePrompt {
+  // [ENH: DYNAMIC-ROLES] Check for dynamic roles first
+  if (options?.sessionId) {
+    const dynamicPrompt = getDynamicRolePromptForSession(options.sessionId, role);
+    if (dynamicPrompt) {
+      return dynamicPrompt;
+    }
+  }
+
   // [ENH: I18N] If language specified, use i18n prompts
   if (options?.language && options.language !== 'en') {
     return role === 'verifier'
@@ -440,6 +445,23 @@ export function getRolePrompt(
       : getConciseCriticPrompt(options.round);
   }
   return ROLE_PROMPTS[role];
+}
+
+/**
+ * Get dynamic role prompt for a session (if set)
+ * [ENH: DYNAMIC-ROLES]
+ */
+function getDynamicRolePromptForSession(
+  sessionId: string,
+  role: VerifierRole
+): RolePrompt | null {
+  // Import dynamically to avoid circular dependency
+  try {
+    const { getDynamicRolePrompt } = require('./dynamic-roles-store.js');
+    return getDynamicRolePrompt(sessionId, role);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -560,4 +582,34 @@ export {
   ROLE_DEFINITIONS,
   ROLE_PROMPTS
 };
+
+// =============================================================================
+// [ENH: DYNAMIC-ROLES] Dynamic Role Generation
+// =============================================================================
+
+export {
+  generateDynamicRoles,
+  detectDomain,
+  generateVerifierRole,
+  generateCriticRole,
+  clearRoleCache,
+  getRoleCacheStats,
+  DEFAULT_DYNAMIC_ROLE_CONFIG,
+  type DynamicRoleConfig,
+  type GeneratedRoles,
+  type SamplingFunction,
+  type SamplingRequest,
+  type SamplingResponse,
+} from './dynamic-generator.js';
+
+export {
+  VERIFIER_ROLE_META_PROMPT,
+  CRITIC_ROLE_META_PROMPT,
+  DOMAIN_DETECTION_META_PROMPT,
+  buildMetaPrompt,
+  type GeneratedVerifierRole,
+  type GeneratedCriticRole,
+  type DomainDetectionResult,
+  type GeneratedCategory,
+} from './meta-prompt.js';
 
