@@ -1,5 +1,6 @@
 /**
  * Utils Module - Advanced data structures and utilities
+ * [REFACTOR: ZOD-UNIFY] Added safe JSON parsing utilities
  */
 
 export {
@@ -29,3 +30,20 @@ export {
   type VerbosityConfig,
   type UserPreferences
 } from './user-preferences.js';
+
+// Safe JSON parsing with Zod validation
+export {
+  safeJsonParse,
+  safeJsonParseSafe,
+  safeJsonParseWithDefault,
+  parseJson,
+  safeJsonParsePassthrough,
+  safeJsonParseStrict,
+  isValidType,
+  assertType,
+  extractJsonFromLLMOutput,
+  parseLLMJsonOutput,
+  parseLLMJsonOutputSafe,
+  SafeParseError,
+  type SafeParseResult
+} from './safe-parse.js';

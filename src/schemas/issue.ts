@@ -55,6 +55,36 @@ export const IssueTransitionTypeEnum = z.enum([
 export type IssueTransitionType = z.infer<typeof IssueTransitionTypeEnum>;
 
 // =============================================================================
+// Impact Analysis Schemas
+// =============================================================================
+
+export const ImpactTypeEnum = z.enum(['DIRECT', 'INDIRECT', 'TEST']);
+export type ImpactType = z.infer<typeof ImpactTypeEnum>;
+
+export const RiskLevelEnum = z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
+export type RiskLevel = z.infer<typeof RiskLevelEnum>;
+
+export const ImpactedCodeSchema = z.object({
+  file: z.string(),
+  functions: z.array(z.string()).optional(),
+  impactType: ImpactTypeEnum,
+  depth: z.number()
+});
+export type ImpactedCode = z.infer<typeof ImpactedCodeSchema>;
+
+export const IssueImpactAnalysisSchema = z.object({
+  callers: z.array(ImpactedCodeSchema),
+  dependencies: z.array(ImpactedCodeSchema),
+  relatedTests: z.array(z.string()),
+  affectedFunctions: z.array(z.string()),
+  cascadeDepth: z.number(),
+  totalAffectedFiles: z.number(),
+  riskLevel: RiskLevelEnum,
+  summary: z.string()
+});
+export type IssueImpactAnalysis = z.infer<typeof IssueImpactAnalysisSchema>;
+
+// =============================================================================
 // Issue Transition Schema
 // =============================================================================
 
@@ -129,8 +159,8 @@ export const IssueStorageSchema = z.object({
   relatedIssues: z.array(z.string()).optional(),
   originalSeverity: SeverityEnum.optional(),
   discoveredDuringDebate: z.boolean().optional(),
-  // Impact analysis (complex nested object, validated loosely)
-  impactAnalysis: z.any().optional(),
+  // [REFACTOR: ZOD-UNIFY] Impact analysis now properly typed
+  impactAnalysis: IssueImpactAnalysisSchema.optional(),
   // Regression tracking
   isRegression: z.boolean().optional(),
   regressionOf: z.string().optional()

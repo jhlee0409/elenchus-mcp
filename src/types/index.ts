@@ -1,125 +1,142 @@
 /**
  * Elenchus MCP Server Types
+ *
+ * [REFACTOR: ZOD-UNIFY] Issue types now imported from centralized Zod schemas
+ * for single source of truth and runtime validation support.
  */
 
 // =============================================================================
-// Verification Criteria
+// Issue Types (from Zod schemas - Single Source of Truth)
 // =============================================================================
 
-export type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+// Import for local use within this file
+import {
+  Severity as _Severity,
+  IssueCategory as _IssueCategory,
+  IssueStatus as _IssueStatus,
+  IssueStorage as _IssueStorage
+} from '../schemas/issue.js';
 
-export type IssueCategory =
-  | 'SECURITY'
-  | 'CORRECTNESS'
-  | 'RELIABILITY'
-  | 'MAINTAINABILITY'
-  | 'PERFORMANCE';
+// Re-export all types and schemas for external consumers
+export {
+  // Enums (types)
+  Severity,
+  IssueCategory,
+  IssueStatus,
+  IssueTransitionType,
+  CriticVerdict,
+  Role,
+  TriggeredBy,
+  ImpactType,
+  RiskLevel,
+  // Schemas (for runtime validation)
+  SeverityEnum,
+  IssueCategoryEnum,
+  IssueStatusEnum,
+  IssueTransitionTypeEnum,
+  CriticVerdictEnum,
+  RoleEnum,
+  TriggeredByEnum,
+  ImpactTypeEnum,
+  RiskLevelEnum,
+  ImpactedCodeSchema,
+  IssueImpactAnalysisSchema,
+  IssueTransitionSchema,
+  IssueInputSchema,
+  IssueStorageSchema,
+  IssueOutputSchema,
+  ConstrainedIssueSchema,
+  // Types
+  ImpactedCode,
+  IssueImpactAnalysis,
+  IssueTransition,
+  IssueInput,
+  IssueStorage,
+  IssueOutput,
+  ConstrainedIssue,
+  // Helper
+  resolveDescription
+} from '../schemas/issue.js';
 
-// [ENH: LIFECYCLE] Extended Issue Status
-export type IssueStatus =
-  | 'RAISED'
-  | 'CHALLENGED'
-  | 'RESOLVED'
-  | 'UNRESOLVED'
-  | 'DISMISSED'      // Invalidated issue
-  | 'MERGED'         // Merged into another issue
-  | 'SPLIT';         // Split into multiple issues
+// Type aliases for backward compatibility
+export type { IssueTransition as IssueTransitionRecord } from '../schemas/issue.js';
+export type { IssueStorage as Issue } from '../schemas/issue.js';
 
-// [ENH: LIFECYCLE] Issue Transition Types
-export type IssueTransitionType =
-  | 'DISCOVERED'     // Found during debate
-  | 'ESCALATED'      // Severity increased
-  | 'DEMOTED'        // Severity decreased
-  | 'MERGED_INTO'    // Merged into another issue
-  | 'SPLIT_FROM'     // Split from another issue
-  | 'INVALIDATED'    // Completely invalid
-  | 'VALIDATED'      // Confirmed valid
-  | 'REFINED';       // Description/evidence updated
+// =============================================================================
+// Session Schemas (from Zod schemas - for runtime validation)
+// [REFACTOR: ZOD-UNIFY] These schemas can be used for runtime validation
+// The TypeScript interfaces below are kept for backward compatibility
+// =============================================================================
 
-// [ENH: LIFECYCLE] Issue Transition Record
-export interface IssueTransitionRecord {
-  type: IssueTransitionType;
-  fromStatus: IssueStatus;
-  toStatus: IssueStatus;
-  fromSeverity?: Severity;
-  toSeverity?: Severity;
-  round: number;
-  reason: string;
-  evidence?: string;
-  triggeredBy: 'verifier' | 'critic' | 'mediator';
-  timestamp: string;
-}
+export {
+  // Session Enums
+  SessionPhaseEnum,
+  SessionStatusEnum,
+  RoundRoleEnum,
+  VerificationModeEnum,
+  VerificationTierEnum,
+  FileLayerEnum,
+  FileChangeStatusEnum,
+  PriorityEnum,
+  ComplexityEnum,
+  LanguageEnum,
+  VerbosityEnum,
+  // Context Schemas
+  FileContextSchema,
+  ContextDeltaSchema,
+  // Verification Mode Schemas
+  VerificationModeConfigSchema,
+  // Framing Schemas
+  VerificationAgendaItemSchema,
+  ContextScopeSchema,
+  FramingResultSchema,
+  // Round Schemas
+  RoundSchema,
+  // Checkpoint Schemas
+  CheckpointSchema,
+  // User Preferences Schema
+  UserPreferencesSchema,
+  // Concise Mode Config Schema
+  ConciseModeConfigSchema,
+  // Pipeline State Schemas
+  TierResultSchema,
+  EscalationSchema,
+  PipelineStateSchema,
+  // Dynamic Roles State Schema
+  DynamicRolesStateSchema,
+  // LLM Eval Schemas
+  LLMEvalConfigSchema,
+  LLMEvalResultsSchema,
+  // Inferred Types (use these for new code)
+  type FileContext as ZodFileContext,
+  type ContextDelta as ZodContextDelta,
+  type VerificationModeConfig as ZodVerificationModeConfig,
+  type VerificationAgendaItem as ZodVerificationAgendaItem,
+  type ContextScope as ZodContextScope,
+  type FramingResult as ZodFramingResult,
+  type Round as ZodRound,
+  type Checkpoint as ZodCheckpoint,
+  type UserPreferences as ZodUserPreferences,
+  type ConciseModeConfig as ZodConciseModeConfig,
+  type TierResult as ZodTierResult,
+  type Escalation as ZodEscalation,
+  type PipelineState as ZodPipelineState,
+  type DynamicRolesState as ZodDynamicRolesState,
+  type LLMEvalConfig as ZodLLMEvalConfig,
+  type LLMEvalResults as ZodLLMEvalResults
+} from '../schemas/session.js';
 
-export interface Issue {
-  id: string;
-  category: IssueCategory;
-  severity: Severity;
-  summary: string;
-  location: string;  // file:line
-  description: string;
-  evidence: string;
-  raisedBy: 'verifier' | 'critic';
-  raisedInRound: number;
-  status: IssueStatus;
-  resolvedInRound?: number;
-  resolution?: string;
-  // [ENH: CRIT-02] Critic approval tracking for issue resolution
-  criticReviewed?: boolean;
-  criticVerdict?: 'VALID' | 'INVALID' | 'PARTIAL';
-  criticReviewRound?: number;
-  // [ENH: LIFECYCLE] Issue Lifecycle tracking
-  transitions?: IssueTransitionRecord[];
-  mergedInto?: string;        // Target issue ID when merged
-  splitFrom?: string;         // Source issue ID when split
-  splitInto?: string[];       // Target issue IDs when this issue was split
-  relatedIssues?: string[];   // Related issue IDs
-  originalSeverity?: Severity; // Original severity before any changes
-  discoveredDuringDebate?: boolean; // True if found during Critic review
-  // [ENH: AUTO-IMPACT] Automatic impact analysis (attached when issue raised)
-  impactAnalysis?: IssueImpactAnalysis;
-  // [FIX: REL-01] Regression tracking
-  isRegression?: boolean;       // True if similar issue was previously resolved
-  regressionOf?: string;        // ID of the previously resolved issue
-}
+// Local type aliases for use within this file
+type Severity = _Severity;
+type IssueCategory = _IssueCategory;
+type IssueStatus = _IssueStatus;
+type Issue = _IssueStorage;
 
 
 // =============================================================================
 // [ENH: AUTO-IMPACT] Automatic Impact Analysis Types
-// Based on: Netflix Chaos Engineering, Google DiRT principles
+// [REFACTOR: ZOD-UNIFY] Now imported from schemas/issue.ts above
 // =============================================================================
-
-/**
- * Impact analysis automatically attached to issues when raised
- * Reduces token waste by providing impact info proactively
- */
-export interface IssueImpactAnalysis {
-  // Direct callers of the affected function/file
-  callers: ImpactedCode[];
-  // Dependencies used by the affected code
-  dependencies: ImpactedCode[];
-  // Related test files (if any)
-  relatedTests: string[];
-  // Functions in the same file that might be affected
-  affectedFunctions: string[];
-  // Cascade depth (how many levels of impact)
-  cascadeDepth: number;
-  // Total number of affected files
-  totalAffectedFiles: number;
-  // Risk assessment based on impact scope
-  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  // Human-readable summary
-  summary: string;
-}
-
-/**
- * Represents a piece of code impacted by an issue
- */
-export interface ImpactedCode {
-  file: string;
-  functions?: string[];
-  impactType: 'DIRECT' | 'INDIRECT' | 'TEST';
-  depth: number;  // 1 = direct, 2+ = transitive
-}
 
 // =============================================================================
 // Context Management
