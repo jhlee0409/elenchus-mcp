@@ -49,6 +49,32 @@ export interface ImpactCoverageResult {
   unreviewedHighRisk: string[];
 }
 
+// [ENH: LLM-EVAL] LLM-enhanced evaluation result
+export interface LLMEnhancedConvergenceResult {
+  // Traditional pattern-based result
+  patternBased: {
+    isConverged: boolean;
+    hasEdgeCaseCoverage: boolean;
+    hasNegativeAssertions: boolean;
+    allCategoriesExamined: boolean;
+  };
+  // LLM evaluation result (if enabled)
+  llmEvaluation?: {
+    qualityScore: number;
+    categoryScores: Record<string, number>;
+    gaps: string[];
+    moreRoundsRecommended: boolean;
+    confidence: 'high' | 'medium' | 'low' | 'uncertain';
+    reasoning: string;
+  };
+  // Final decision (LLM takes precedence if enabled and confident)
+  finalDecision: {
+    isConverged: boolean;
+    source: 'pattern' | 'llm' | 'combined';
+    reason: string;
+  };
+}
+
 // =============================================================================
 // Constants (moved from inline)
 // =============================================================================

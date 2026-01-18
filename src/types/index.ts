@@ -315,6 +315,37 @@ export interface Session {
     generatedAt: string;
     fromCache: boolean;
   };
+  // [ENH: LLM-EVAL] LLM-based evaluation configuration
+  llmEvalConfig?: {
+    enabled: boolean;
+    convergenceEval: boolean;
+    severityEval: boolean;
+    edgeCaseEval: boolean;
+    falsePositiveEval: boolean;
+    temperature?: number;
+    fallbackToPatterns: boolean;
+  };
+  // [ENH: LLM-EVAL] LLM evaluation results cache
+  llmEvalResults?: {
+    convergence?: {
+      qualityScore: number;
+      categoryScores: Record<string, number>;
+      gaps: string[];
+      moreRoundsRecommended: boolean;
+      evaluatedAt: string;
+    };
+    severityAdjustments?: Array<{
+      issueId: string;
+      originalSeverity: string;
+      adjustedSeverity: string;
+      reason: string;
+    }>;
+    edgeCaseCoverage?: {
+      coverageScore: number;
+      analyzedCases: number;
+      missingCritical: number;
+    };
+  };
 }
 
 // =============================================================================
