@@ -69,6 +69,8 @@ export {
   validateCriticOutput,
   estimateStructuredTokenSavings
 } from './structured-output.js';
+// [ENH: DYNAMIC-ROLES] Dynamic role lookup
+import { getDynamicRolePrompt as getDynamicRolePromptFromStore } from './dynamic-roles-store.js';
 
 // =============================================================================
 // State Management
@@ -455,13 +457,8 @@ function getDynamicRolePromptForSession(
   sessionId: string,
   role: VerifierRole
 ): RolePrompt | null {
-  // Import dynamically to avoid circular dependency
-  try {
-    const { getDynamicRolePrompt } = require('./dynamic-roles-store.js');
-    return getDynamicRolePrompt(sessionId, role);
-  } catch {
-    return null;
-  }
+  // [ENH: DYNAMIC-ROLES] Use imported function from dynamic-roles-store
+  return getDynamicRolePromptFromStore(sessionId, role);
 }
 
 /**
