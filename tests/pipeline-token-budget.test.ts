@@ -190,7 +190,8 @@ describe('Pipeline Token Budget Enforcement', () => {
         ...DEFAULT_PIPELINE_CONFIG,
         enforceTokenBudget: true,
         maxTotalTokens: 500,
-        autoEscalate: true
+        autoEscalate: true,
+        qualityFirst: false  // Must be false to block escalation on budget exceed
       };
 
       initializePipeline(sessionId, config);

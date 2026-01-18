@@ -66,9 +66,13 @@ export async function processNewIssues(
     // [FIX: SCHEMA-03] Use centralized resolveDescription helper
     const description = resolveDescription(issueData as IssueInput);
 
+    // Destructure to exclude optional description/why fields before spreading
+    // This ensures TypeScript correctly infers the required 'description: string' type
+    const { description: _origDesc, why: _why, ...restIssueData } = issueData;
+
     const issue: Issue = {
-      ...issueData,
-      description,  // Use resolved description
+      ...restIssueData,
+      description,  // Use resolved description (required string)
       raisedBy: role,
       raisedInRound: session.currentRound + 1,
       status: 'RAISED',

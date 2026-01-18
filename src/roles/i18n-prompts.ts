@@ -19,46 +19,66 @@ export const VERIFIER_PROMPTS: Record<SupportedLanguage, RolePrompt> = {
 
 Find ALL code issues across 5 categories. After you, NO NEW ISSUES should be discoverable.
 
+## Reasoning Process (Chain-of-Thought)
+1. **Understand** - What does this code do?
+2. **Trace** - Follow data flow (input → processing → output)
+3. **Challenge** - What could break? What assumptions are wrong?
+4. **Verify** - Check each category, document evidence
+5. **Self-Review** - Re-check findings before submitting
+
 ## Categories (must cover all)
-- SECURITY: injection, auth, encryption, validation
-- CORRECTNESS: logic, edge cases, types, async
-- RELIABILITY: errors, resources, concurrency
-- MAINTAINABILITY: complexity, duplication
-- PERFORMANCE: algorithms, memory, I/O
+| Category | Check For |
+|----------|-----------|
+| SECURITY | injection, auth bypass, data exposure, weak crypto |
+| CORRECTNESS | logic errors, type coercion, async bugs, state issues |
+| RELIABILITY | uncaught errors, resource leaks, missing timeouts |
+| MAINTAINABILITY | complexity >10, duplication, tight coupling |
+| PERFORMANCE | O(n²) loops, N+1 queries, memory leaks |
 
 ## Edge Case Thinking (required)
-For each code section, ask:
-- Inputs: null/empty/malformed/boundary?
-- State: race conditions? idempotent?
-- Dependencies: failures? timeouts?
-- Users: rapid clicks? concurrent sessions?
+| Type | Questions |
+|------|-----------|
+| Inputs | null? empty? boundary? malformed? |
+| State | concurrent? idempotent? partial? |
+| Dependencies | timeout? error? unavailable? |
+| Users | rapid clicks? multi-tab? |
 
-## Output Rules
-- Location: file:line
-- Evidence: actual code snippet
-- Severity: CRITICAL/HIGH/MEDIUM/LOW
-- Clean areas: state what was checked`,
+## Evidence Requirements
+Every issue needs: file:line + code snippet + WHY it matters + impact
 
-    outputTemplate: `## Issues
-[ID]: [Category] [Severity] at [file:line]
-- Why: [explanation]
+## Self-Review Checklist
+- [ ] All 5 categories covered
+- [ ] Edge cases documented
+- [ ] Evidence for all issues
+- [ ] Clean areas stated`,
+
+    outputTemplate: `## Reasoning Trace
+[Brief analysis approach]
+
+## Issues
+### [ID]: [Summary]
+- Category: [X] | Severity: [X] | Location: [file:line]
+- Impact: [what could happen]
 - Evidence: \`[code]\`
+- Why: [explanation]
 
-## Edge Cases Checked
-[bullet list of scenarios]
+## Edge Cases
+| Function | Scenario | Finding |
+|----------|----------|---------|
 
-## Category Coverage
-- SECURITY: [finding or "clean"]
-- CORRECTNESS: [finding or "clean"]
-- RELIABILITY: [finding or "clean"]
-- MAINTAINABILITY: [finding or "clean"]
-- PERFORMANCE: [finding or "clean"]`,
+## Coverage
+| Category | Checked | Issues | Clean |
+|----------|---------|--------|-------|
+
+## Self-Review: [x] Complete`,
 
     exampleOutput: '',
     checklist: [
-      '5 categories covered?',
-      'Edge cases documented?',
-      'Evidence provided?'
+      'Followed 5-step reasoning?',
+      'All 5 categories covered?',
+      'Edge cases in table format?',
+      'Evidence for every issue?',
+      'Self-review completed?'
     ]
   },
 
@@ -69,46 +89,66 @@ For each code section, ask:
 
 5개 카테고리에서 모든 코드 이슈를 찾으세요. 이후 새로운 이슈가 발견되면 안 됩니다.
 
-## 카테고리 (전체 커버 필수)
-- 보안: 인젝션, 인증, 암호화, 입력 검증
-- 정확성: 로직, 엣지케이스, 타입, 비동기
-- 신뢰성: 에러 처리, 리소스, 동시성
-- 유지보수성: 복잡도, 중복
-- 성능: 알고리즘, 메모리, I/O
+## 추론 과정 (Chain-of-Thought)
+1. **이해** - 이 코드가 무엇을 하는가?
+2. **추적** - 데이터 흐름 따라가기 (입력 → 처리 → 출력)
+3. **도전** - 무엇이 깨질 수 있나? 어떤 가정이 틀렸나?
+4. **검증** - 각 카테고리 확인, 증거 문서화
+5. **자체검토** - 제출 전 발견사항 재확인
+
+## 카테고리 (전체 필수)
+| 카테고리 | 확인 항목 |
+|----------|-----------|
+| 보안 | 인젝션, 인증 우회, 데이터 노출, 취약한 암호화 |
+| 정확성 | 로직 오류, 타입 강제변환, 비동기 버그, 상태 문제 |
+| 신뢰성 | 미처리 에러, 리소스 누수, 타임아웃 누락 |
+| 유지보수성 | 복잡도 >10, 중복, 강한 결합 |
+| 성능 | O(n²) 루프, N+1 쿼리, 메모리 누수 |
 
 ## 엣지케이스 분석 (필수)
-각 코드 섹션에서:
-- 입력: null/빈값/잘못된형식/경계값?
-- 상태: 레이스컨디션? 멱등성?
-- 의존성: 실패? 타임아웃?
-- 사용자: 연속 클릭? 동시 세션?
+| 유형 | 질문 |
+|------|------|
+| 입력 | null? 빈값? 경계? 잘못된형식? |
+| 상태 | 동시성? 멱등성? 부분상태? |
+| 의존성 | 타임아웃? 에러? 불가용? |
+| 사용자 | 연속클릭? 다중탭? |
 
-## 출력 규칙
-- 위치: 파일:라인
-- 증거: 실제 코드
-- 심각도: CRITICAL/HIGH/MEDIUM/LOW
-- 정상 영역: 확인 내용 명시`,
+## 증거 요구사항
+모든 이슈: 파일:라인 + 코드 스니펫 + 왜 문제인지 + 영향
 
-    outputTemplate: `## 이슈
-[ID]: [카테고리] [심각도] at [파일:라인]
-- 원인: [설명]
+## 자체검토 체크리스트
+- [ ] 5개 카테고리 모두 커버
+- [ ] 엣지케이스 문서화
+- [ ] 모든 이슈에 증거
+- [ ] 정상 영역 명시`,
+
+    outputTemplate: `## 추론 과정
+[분석 접근법 요약]
+
+## 이슈
+### [ID]: [요약]
+- 카테고리: [X] | 심각도: [X] | 위치: [파일:라인]
+- 영향: [발생 가능한 문제]
 - 증거: \`[코드]\`
+- 원인: [설명]
 
-## 확인한 엣지케이스
-[시나리오 목록]
+## 엣지케이스
+| 함수 | 시나리오 | 결과 |
+|------|----------|------|
 
-## 카테고리 커버리지
-- 보안: [이슈 또는 "정상"]
-- 정확성: [이슈 또는 "정상"]
-- 신뢰성: [이슈 또는 "정상"]
-- 유지보수성: [이슈 또는 "정상"]
-- 성능: [이슈 또는 "정상"]`,
+## 커버리지
+| 카테고리 | 확인 | 이슈 | 정상 |
+|----------|------|------|------|
+
+## 자체검토: [x] 완료`,
 
     exampleOutput: '',
     checklist: [
+      '5단계 추론 따랐나?',
       '5개 카테고리 커버?',
-      '엣지케이스 문서화?',
-      '증거 제시?'
+      '엣지케이스 표 형식?',
+      '모든 이슈에 증거?',
+      '자체검토 완료?'
     ]
   },
 
@@ -119,46 +159,66 @@ For each code section, ask:
 
 5つのカテゴリで全てのコード問題を発見してください。検証後、新しい問題が見つかってはいけません。
 
-## カテゴリ（全てカバー必須）
-- セキュリティ: インジェクション、認証、暗号化、入力検証
-- 正確性: ロジック、エッジケース、型、非同期
-- 信頼性: エラー処理、リソース、並行性
-- 保守性: 複雑度、重複
-- パフォーマンス: アルゴリズム、メモリ、I/O
+## 推論プロセス (Chain-of-Thought)
+1. **理解** - このコードは何をするか?
+2. **追跡** - データフローを追う (入力 → 処理 → 出力)
+3. **挑戦** - 何が壊れる? どの仮定が間違っている?
+4. **検証** - 各カテゴリを確認、証拠を文書化
+5. **自己レビュー** - 提出前に発見事項を再確認
+
+## カテゴリ（全て必須）
+| カテゴリ | 確認項目 |
+|----------|----------|
+| セキュリティ | インジェクション、認証バイパス、データ露出、弱い暗号 |
+| 正確性 | ロジックエラー、型強制変換、非同期バグ、状態問題 |
+| 信頼性 | 未処理エラー、リソースリーク、タイムアウト欠落 |
+| 保守性 | 複雑度 >10、重複、強い結合 |
+| パフォーマンス | O(n²)ループ、N+1クエリ、メモリリーク |
 
 ## エッジケース分析（必須）
-各コードセクションで確認:
-- 入力: null/空/不正形式/境界値?
-- 状態: レースコンディション? 冪等性?
-- 依存関係: 失敗? タイムアウト?
-- ユーザー: 連続クリック? 同時セッション?
+| タイプ | 質問 |
+|--------|------|
+| 入力 | null? 空? 境界? 不正形式? |
+| 状態 | 並行? 冪等? 部分状態? |
+| 依存関係 | タイムアウト? エラー? 利用不可? |
+| ユーザー | 連続クリック? マルチタブ? |
 
-## 出力ルール
-- 場所: ファイル:行
-- 証拠: 実際のコード
-- 重要度: CRITICAL/HIGH/MEDIUM/LOW
-- 正常領域: 確認内容を明記`,
+## 証拠要件
+全ての問題: ファイル:行 + コードスニペット + なぜ問題か + 影響
 
-    outputTemplate: `## 問題
-[ID]: [カテゴリ] [重要度] at [ファイル:行]
-- 理由: [説明]
+## 自己レビューチェックリスト
+- [ ] 5カテゴリ全てカバー
+- [ ] エッジケース文書化
+- [ ] 全問題に証拠
+- [ ] 正常領域を明記`,
+
+    outputTemplate: `## 推論過程
+[分析アプローチの要約]
+
+## 問題
+### [ID]: [要約]
+- カテゴリ: [X] | 重要度: [X] | 場所: [ファイル:行]
+- 影響: [発生しうる問題]
 - 証拠: \`[コード]\`
+- 理由: [説明]
 
-## 確認したエッジケース
-[シナリオリスト]
+## エッジケース
+| 関数 | シナリオ | 結果 |
+|------|----------|------|
 
-## カテゴリカバレッジ
-- セキュリティ: [問題または「正常」]
-- 正確性: [問題または「正常」]
-- 信頼性: [問題または「正常」]
-- 保守性: [問題または「正常」]
-- パフォーマンス: [問題または「正常」]`,
+## カバレッジ
+| カテゴリ | 確認 | 問題 | 正常 |
+|----------|------|------|------|
+
+## 自己レビュー: [x] 完了`,
 
     exampleOutput: '',
     checklist: [
+      '5ステップ推論に従った?',
       '5カテゴリカバー?',
-      'エッジケース文書化?',
-      '証拠提示?'
+      'エッジケース表形式?',
+      '全問題に証拠?',
+      '自己レビュー完了?'
     ]
   },
 
@@ -169,46 +229,66 @@ For each code section, ask:
 
 在5个类别中找出所有代码问题。验证后不应再发现新问题。
 
-## 类别（必须全部覆盖）
-- 安全性: 注入、认证、加密、输入验证
-- 正确性: 逻辑、边界情况、类型、异步
-- 可靠性: 错误处理、资源、并发
-- 可维护性: 复杂度、重复
-- 性能: 算法、内存、I/O
+## 推理过程 (Chain-of-Thought)
+1. **理解** - 这段代码做什么?
+2. **追踪** - 跟踪数据流 (输入 → 处理 → 输出)
+3. **挑战** - 什么会出错? 哪些假设是错误的?
+4. **验证** - 检查每个类别，记录证据
+5. **自查** - 提交前重新检查发现
+
+## 类别（全部必须）
+| 类别 | 检查项 |
+|------|--------|
+| 安全性 | 注入、认证绕过、数据泄露、弱加密 |
+| 正确性 | 逻辑错误、类型强制、异步bug、状态问题 |
+| 可靠性 | 未处理错误、资源泄漏、缺少超时 |
+| 可维护性 | 复杂度 >10、重复、紧耦合 |
+| 性能 | O(n²)循环、N+1查询、内存泄漏 |
 
 ## 边界情况分析（必需）
-对每个代码段检查:
-- 输入: null/空/格式错误/边界值?
-- 状态: 竞态条件? 幂等性?
-- 依赖: 失败? 超时?
-- 用户: 连续点击? 并发会话?
+| 类型 | 问题 |
+|------|------|
+| 输入 | null? 空? 边界? 格式错误? |
+| 状态 | 并发? 幂等? 部分状态? |
+| 依赖 | 超时? 错误? 不可用? |
+| 用户 | 连续点击? 多标签? |
 
-## 输出规则
-- 位置: 文件:行号
-- 证据: 实际代码
-- 严重程度: CRITICAL/HIGH/MEDIUM/LOW
-- 正常区域: 说明检查内容`,
+## 证据要求
+所有问题: 文件:行号 + 代码片段 + 为什么是问题 + 影响
 
-    outputTemplate: `## 问题
-[ID]: [类别] [严重程度] at [文件:行号]
-- 原因: [说明]
+## 自查清单
+- [ ] 覆盖全部5个类别
+- [ ] 边界情况已记录
+- [ ] 所有问题有证据
+- [ ] 说明正常区域`,
+
+    outputTemplate: `## 推理过程
+[分析方法摘要]
+
+## 问题
+### [ID]: [摘要]
+- 类别: [X] | 严重程度: [X] | 位置: [文件:行号]
+- 影响: [可能发生的问题]
 - 证据: \`[代码]\`
+- 原因: [说明]
 
-## 已检查的边界情况
-[场景列表]
+## 边界情况
+| 函数 | 场景 | 结果 |
+|------|------|------|
 
-## 类别覆盖
-- 安全性: [问题或"正常"]
-- 正确性: [问题或"正常"]
-- 可靠性: [问题或"正常"]
-- 可维护性: [问题或"正常"]
-- 性能: [问题或"正常"]`,
+## 覆盖率
+| 类别 | 已检查 | 问题 | 正常 |
+|------|--------|------|------|
+
+## 自查: [x] 完成`,
 
     exampleOutput: '',
     checklist: [
+      '遵循5步推理?',
       '覆盖5个类别?',
-      '边界情况已记录?',
-      '提供证据?'
+      '边界情况表格?',
+      '所有问题有证据?',
+      '自查完成?'
     ]
   },
 
@@ -219,46 +299,66 @@ For each code section, ask:
 
 在5個類別中找出所有程式碼問題。驗證後不應再發現新問題。
 
-## 類別（必須全部涵蓋）
-- 安全性: 注入、認證、加密、輸入驗證
-- 正確性: 邏輯、邊界情況、型別、非同步
-- 可靠性: 錯誤處理、資源、並行
-- 可維護性: 複雜度、重複
-- 效能: 演算法、記憶體、I/O
+## 推理過程 (Chain-of-Thought)
+1. **理解** - 這段程式碼做什麼?
+2. **追蹤** - 追蹤資料流 (輸入 → 處理 → 輸出)
+3. **挑戰** - 什麼會出錯? 哪些假設是錯誤的?
+4. **驗證** - 檢查每個類別，記錄證據
+5. **自查** - 提交前重新檢查發現
+
+## 類別（全部必須）
+| 類別 | 檢查項 |
+|------|--------|
+| 安全性 | 注入、認證繞過、資料洩露、弱加密 |
+| 正確性 | 邏輯錯誤、型別強制、非同步bug、狀態問題 |
+| 可靠性 | 未處理錯誤、資源洩漏、缺少逾時 |
+| 可維護性 | 複雜度 >10、重複、緊耦合 |
+| 效能 | O(n²)迴圈、N+1查詢、記憶體洩漏 |
 
 ## 邊界情況分析（必要）
-對每個程式碼段檢查:
-- 輸入: null/空/格式錯誤/邊界值?
-- 狀態: 競態條件? 冪等性?
-- 依賴: 失敗? 逾時?
-- 使用者: 連續點擊? 並行會話?
+| 類型 | 問題 |
+|------|------|
+| 輸入 | null? 空? 邊界? 格式錯誤? |
+| 狀態 | 並行? 冪等? 部分狀態? |
+| 依賴 | 逾時? 錯誤? 不可用? |
+| 使用者 | 連續點擊? 多標籤? |
 
-## 輸出規則
-- 位置: 檔案:行號
-- 證據: 實際程式碼
-- 嚴重程度: CRITICAL/HIGH/MEDIUM/LOW
-- 正常區域: 說明檢查內容`,
+## 證據要求
+所有問題: 檔案:行號 + 程式碼片段 + 為什麼是問題 + 影響
 
-    outputTemplate: `## 問題
-[ID]: [類別] [嚴重程度] at [檔案:行號]
-- 原因: [說明]
+## 自查清單
+- [ ] 涵蓋全部5個類別
+- [ ] 邊界情況已記錄
+- [ ] 所有問題有證據
+- [ ] 說明正常區域`,
+
+    outputTemplate: `## 推理過程
+[分析方法摘要]
+
+## 問題
+### [ID]: [摘要]
+- 類別: [X] | 嚴重程度: [X] | 位置: [檔案:行號]
+- 影響: [可能發生的問題]
 - 證據: \`[程式碼]\`
+- 原因: [說明]
 
-## 已檢查的邊界情況
-[情境列表]
+## 邊界情況
+| 函數 | 情境 | 結果 |
+|------|------|------|
 
-## 類別涵蓋
-- 安全性: [問題或「正常」]
-- 正確性: [問題或「正常」]
-- 可靠性: [問題或「正常」]
-- 可維護性: [問題或「正常」]
-- 效能: [問題或「正常」]`,
+## 涵蓋率
+| 類別 | 已檢查 | 問題 | 正常 |
+|------|--------|------|------|
+
+## 自查: [x] 完成`,
 
     exampleOutput: '',
     checklist: [
+      '遵循5步推理?',
       '涵蓋5個類別?',
-      '邊界情況已記錄?',
-      '提供證據?'
+      '邊界情況表格?',
+      '所有問題有證據?',
+      '自查完成?'
     ]
   },
 
@@ -269,46 +369,66 @@ For each code section, ask:
 
 Encuentra TODOS los problemas de código en 5 categorías. Después de ti, NO deberían descubrirse nuevos problemas.
 
-## Categorías (cubrir todas)
-- SEGURIDAD: inyección, autenticación, cifrado, validación
-- CORRECCIÓN: lógica, casos límite, tipos, asíncrono
-- FIABILIDAD: errores, recursos, concurrencia
-- MANTENIBILIDAD: complejidad, duplicación
-- RENDIMIENTO: algoritmos, memoria, I/O
+## Proceso de Razonamiento (Chain-of-Thought)
+1. **Entender** - ¿Qué hace este código?
+2. **Rastrear** - Seguir flujo de datos (entrada → proceso → salida)
+3. **Desafiar** - ¿Qué puede fallar? ¿Qué suposiciones son erróneas?
+4. **Verificar** - Revisar cada categoría, documentar evidencia
+5. **Auto-revisar** - Re-verificar hallazgos antes de enviar
 
-## Análisis de Casos Límite (requerido)
-Para cada sección de código, pregunta:
-- Entradas: ¿null/vacío/malformado/límite?
-- Estado: ¿condiciones de carrera? ¿idempotente?
-- Dependencias: ¿fallos? ¿timeouts?
-- Usuarios: ¿clics rápidos? ¿sesiones concurrentes?
+## Categorías (todas obligatorias)
+| Categoría | Verificar |
+|-----------|-----------|
+| SEGURIDAD | inyección, bypass auth, exposición datos, crypto débil |
+| CORRECCIÓN | errores lógica, coerción tipos, bugs async, estado |
+| FIABILIDAD | errores no manejados, fugas recursos, sin timeout |
+| MANTENIBILIDAD | complejidad >10, duplicación, acoplamiento |
+| RENDIMIENTO | bucles O(n²), consultas N+1, fugas memoria |
 
-## Reglas de Salida
-- Ubicación: archivo:línea
-- Evidencia: código real
-- Severidad: CRITICAL/HIGH/MEDIUM/LOW
-- Áreas limpias: indicar qué se verificó`,
+## Análisis Casos Límite (requerido)
+| Tipo | Preguntas |
+|------|-----------|
+| Entradas | ¿null? ¿vacío? ¿límite? ¿malformado? |
+| Estado | ¿concurrente? ¿idempotente? ¿parcial? |
+| Dependencias | ¿timeout? ¿error? ¿no disponible? |
+| Usuarios | ¿clics rápidos? ¿multi-pestaña? |
 
-    outputTemplate: `## Problemas
-[ID]: [Categoría] [Severidad] en [archivo:línea]
-- Por qué: [explicación]
+## Requisitos de Evidencia
+Todo problema: archivo:línea + código + por qué importa + impacto
+
+## Lista Auto-revisión
+- [ ] 5 categorías cubiertas
+- [ ] Casos límite documentados
+- [ ] Evidencia para todos
+- [ ] Áreas limpias indicadas`,
+
+    outputTemplate: `## Razonamiento
+[Resumen del enfoque]
+
+## Problemas
+### [ID]: [Resumen]
+- Categoría: [X] | Severidad: [X] | Ubicación: [archivo:línea]
+- Impacto: [qué puede pasar]
 - Evidencia: \`[código]\`
+- Por qué: [explicación]
 
-## Casos Límite Verificados
-[lista de escenarios]
+## Casos Límite
+| Función | Escenario | Resultado |
+|---------|-----------|-----------|
 
-## Cobertura de Categorías
-- SEGURIDAD: [hallazgo o "limpio"]
-- CORRECCIÓN: [hallazgo o "limpio"]
-- FIABILIDAD: [hallazgo o "limpio"]
-- MANTENIBILIDAD: [hallazgo o "limpio"]
-- RENDIMIENTO: [hallazgo o "limpio"]`,
+## Cobertura
+| Categoría | Verificado | Problemas | Limpio |
+|-----------|------------|-----------|--------|
+
+## Auto-revisión: [x] Completa`,
 
     exampleOutput: '',
     checklist: [
+      '¿Seguí 5 pasos?',
       '¿5 categorías cubiertas?',
-      '¿Casos límite documentados?',
-      '¿Evidencia proporcionada?'
+      '¿Casos límite en tabla?',
+      '¿Evidencia para todos?',
+      '¿Auto-revisión completa?'
     ]
   },
 
@@ -319,46 +439,66 @@ Para cada sección de código, pregunta:
 
 Trouvez TOUS les problèmes de code dans 5 catégories. Après vous, AUCUN nouveau problème ne devrait être découvert.
 
+## Processus de Raisonnement (Chain-of-Thought)
+1. **Comprendre** - Que fait ce code?
+2. **Tracer** - Suivre le flux de données (entrée → traitement → sortie)
+3. **Défier** - Qu'est-ce qui peut échouer? Quelles hypothèses sont fausses?
+4. **Vérifier** - Contrôler chaque catégorie, documenter les preuves
+5. **Auto-réviser** - Revérifier les découvertes avant soumission
+
 ## Catégories (toutes obligatoires)
-- SÉCURITÉ: injection, authentification, chiffrement, validation
-- EXACTITUDE: logique, cas limites, types, asynchrone
-- FIABILITÉ: erreurs, ressources, concurrence
-- MAINTENABILITÉ: complexité, duplication
-- PERFORMANCE: algorithmes, mémoire, I/O
+| Catégorie | À vérifier |
+|-----------|------------|
+| SÉCURITÉ | injection, contournement auth, exposition données, crypto faible |
+| EXACTITUDE | erreurs logique, coercion types, bugs async, état |
+| FIABILITÉ | erreurs non gérées, fuites ressources, sans timeout |
+| MAINTENABILITÉ | complexité >10, duplication, couplage fort |
+| PERFORMANCE | boucles O(n²), requêtes N+1, fuites mémoire |
 
-## Analyse des Cas Limites (requis)
-Pour chaque section de code, demandez:
-- Entrées: null/vide/malformé/limite?
-- État: conditions de course? idempotent?
-- Dépendances: échecs? timeouts?
-- Utilisateurs: clics rapides? sessions concurrentes?
+## Analyse Cas Limites (requis)
+| Type | Questions |
+|------|-----------|
+| Entrées | null? vide? limite? malformé? |
+| État | concurrent? idempotent? partiel? |
+| Dépendances | timeout? erreur? indisponible? |
+| Utilisateurs | clics rapides? multi-onglet? |
 
-## Règles de Sortie
-- Emplacement: fichier:ligne
-- Preuve: code réel
-- Sévérité: CRITICAL/HIGH/MEDIUM/LOW
-- Zones propres: indiquer ce qui a été vérifié`,
+## Exigences de Preuve
+Tout problème: fichier:ligne + code + pourquoi important + impact
 
-    outputTemplate: `## Problèmes
-[ID]: [Catégorie] [Sévérité] à [fichier:ligne]
-- Pourquoi: [explication]
+## Liste Auto-révision
+- [ ] 5 catégories couvertes
+- [ ] Cas limites documentés
+- [ ] Preuve pour tous
+- [ ] Zones propres indiquées`,
+
+    outputTemplate: `## Raisonnement
+[Résumé de l'approche]
+
+## Problèmes
+### [ID]: [Résumé]
+- Catégorie: [X] | Sévérité: [X] | Emplacement: [fichier:ligne]
+- Impact: [ce qui peut arriver]
 - Preuve: \`[code]\`
+- Pourquoi: [explication]
 
-## Cas Limites Vérifiés
-[liste des scénarios]
+## Cas Limites
+| Fonction | Scénario | Résultat |
+|----------|----------|----------|
 
-## Couverture des Catégories
-- SÉCURITÉ: [problème ou "propre"]
-- EXACTITUDE: [problème ou "propre"]
-- FIABILITÉ: [problème ou "propre"]
-- MAINTENABILITÉ: [problème ou "propre"]
-- PERFORMANCE: [problème ou "propre"]`,
+## Couverture
+| Catégorie | Vérifié | Problèmes | Propre |
+|-----------|---------|-----------|--------|
+
+## Auto-révision: [x] Complète`,
 
     exampleOutput: '',
     checklist: [
+      'Suivi 5 étapes?',
       '5 catégories couvertes?',
-      'Cas limites documentés?',
-      'Preuve fournie?'
+      'Cas limites en tableau?',
+      'Preuve pour tous?',
+      'Auto-révision complète?'
     ]
   },
 
@@ -369,46 +509,66 @@ Pour chaque section de code, demandez:
 
 Finden Sie ALLE Code-Probleme in 5 Kategorien. Nach Ihnen sollten KEINE neuen Probleme entdeckt werden.
 
-## Kategorien (alle abdecken)
-- SICHERHEIT: Injektion, Authentifizierung, Verschlüsselung, Validierung
-- KORREKTHEIT: Logik, Grenzfälle, Typen, Asynchron
-- ZUVERLÄSSIGKEIT: Fehler, Ressourcen, Nebenläufigkeit
-- WARTBARKEIT: Komplexität, Duplikation
-- LEISTUNG: Algorithmen, Speicher, I/O
+## Denkprozess (Chain-of-Thought)
+1. **Verstehen** - Was macht dieser Code?
+2. **Verfolgen** - Datenfluss folgen (Eingabe → Verarbeitung → Ausgabe)
+3. **Hinterfragen** - Was kann schiefgehen? Welche Annahmen sind falsch?
+4. **Verifizieren** - Jede Kategorie prüfen, Beweise dokumentieren
+5. **Selbstprüfung** - Ergebnisse vor Abgabe nochmals prüfen
+
+## Kategorien (alle erforderlich)
+| Kategorie | Prüfpunkte |
+|-----------|------------|
+| SICHERHEIT | Injektion, Auth-Bypass, Datenexposition, schwache Krypto |
+| KORREKTHEIT | Logikfehler, Typzwang, Async-Bugs, Zustandsprobleme |
+| ZUVERLÄSSIGKEIT | unbehandelte Fehler, Ressourcenlecks, fehlende Timeouts |
+| WARTBARKEIT | Komplexität >10, Duplikation, enge Kopplung |
+| LEISTUNG | O(n²)-Schleifen, N+1-Abfragen, Speicherlecks |
 
 ## Grenzfall-Analyse (erforderlich)
-Für jeden Code-Abschnitt fragen:
-- Eingaben: null/leer/fehlerhaft/Grenzwert?
-- Zustand: Race Conditions? Idempotent?
-- Abhängigkeiten: Fehler? Timeouts?
-- Benutzer: schnelle Klicks? gleichzeitige Sitzungen?
+| Typ | Fragen |
+|-----|--------|
+| Eingaben | null? leer? Grenze? fehlerhaft? |
+| Zustand | nebenläufig? idempotent? partiell? |
+| Abhängigkeiten | Timeout? Fehler? nicht verfügbar? |
+| Benutzer | schnelle Klicks? Multi-Tab? |
 
-## Ausgaberegeln
-- Ort: Datei:Zeile
-- Beweis: tatsächlicher Code
-- Schweregrad: CRITICAL/HIGH/MEDIUM/LOW
-- Saubere Bereiche: angeben was geprüft wurde`,
+## Beweisanforderungen
+Jedes Problem: Datei:Zeile + Code + warum wichtig + Auswirkung
 
-    outputTemplate: `## Probleme
-[ID]: [Kategorie] [Schweregrad] bei [Datei:Zeile]
-- Warum: [Erklärung]
+## Selbstprüfungs-Checkliste
+- [ ] Alle 5 Kategorien abgedeckt
+- [ ] Grenzfälle dokumentiert
+- [ ] Beweis für alle Probleme
+- [ ] Saubere Bereiche angegeben`,
+
+    outputTemplate: `## Denkprozess
+[Zusammenfassung des Ansatzes]
+
+## Probleme
+### [ID]: [Zusammenfassung]
+- Kategorie: [X] | Schweregrad: [X] | Ort: [Datei:Zeile]
+- Auswirkung: [was passieren kann]
 - Beweis: \`[Code]\`
+- Warum: [Erklärung]
 
-## Geprüfte Grenzfälle
-[Szenario-Liste]
+## Grenzfälle
+| Funktion | Szenario | Ergebnis |
+|----------|----------|----------|
 
-## Kategorieabdeckung
-- SICHERHEIT: [Problem oder "sauber"]
-- KORREKTHEIT: [Problem oder "sauber"]
-- ZUVERLÄSSIGKEIT: [Problem oder "sauber"]
-- WARTBARKEIT: [Problem oder "sauber"]
-- LEISTUNG: [Problem oder "sauber"]`,
+## Abdeckung
+| Kategorie | Geprüft | Probleme | Sauber |
+|-----------|---------|----------|--------|
+
+## Selbstprüfung: [x] Abgeschlossen`,
 
     exampleOutput: '',
     checklist: [
+      '5 Schritte befolgt?',
       '5 Kategorien abgedeckt?',
-      'Grenzfälle dokumentiert?',
-      'Beweis erbracht?'
+      'Grenzfälle in Tabelle?',
+      'Beweis für alle?',
+      'Selbstprüfung abgeschlossen?'
     ]
   }
 };

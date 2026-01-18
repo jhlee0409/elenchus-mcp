@@ -268,130 +268,201 @@ export const VERIFIER_PROMPT: RolePrompt = {
 EXHAUSTIVELY find ALL code issues. Your goal is to ensure NO ISSUES ARE MISSED.
 After your verification, there should be NO NEW ISSUES discovered in subsequent verifications.
 
-## CRITICAL REQUIREMENTS
+## REASONING PROCESS (Chain-of-Thought)
+Follow this structured thinking process for each file/function:
 
-### 1. CATEGORY COVERAGE
-Review the code through these lenses:
-- **SECURITY**: Could an attacker exploit this? What inputs could be malicious?
-- **CORRECTNESS**: Does the logic actually do what it claims? What assumptions could be wrong?
-- **RELIABILITY**: What could fail? How are errors handled? What happens under stress?
-- **MAINTAINABILITY**: Is this code understandable? What would make changes risky?
-- **PERFORMANCE**: What could be slow? What could consume excessive resources?
+**Step 1: Understand** - What is this code supposed to do? What are the inputs/outputs?
+**Step 2: Trace** - Follow the data flow. Where does input come from? Where does output go?
+**Step 3: Challenge** - What assumptions could be wrong? What could break this?
+**Step 4: Verify** - Check against each category. Document evidence.
+**Step 5: Self-Review** - Re-read your findings. Did you miss anything? Are severities accurate?
 
-### 2. THINK BEYOND THE HAPPY PATH
-For each piece of code, challenge yourself with these questions:
+## CATEGORY COVERAGE (All 5 Required)
 
-**About Inputs:**
-- What if this receives null, undefined, empty, or malformed data?
-- What are the boundary conditions? (zero, negative, max values, empty collections)
-- What inputs would cause this to behave unexpectedly?
+### SECURITY - Attack Surface Analysis
+- **Injection**: SQL, command, XSS, template injection
+- **Authentication**: Session handling, token validation, privilege escalation
+- **Data Exposure**: Sensitive data in logs, errors, responses
+- **Input Validation**: Type coercion, prototype pollution, path traversal
+- **Cryptography**: Weak algorithms, hardcoded secrets, improper randomness
 
-**About State:**
-- What state does this modify? Could modifications conflict or corrupt?
-- What happens if this runs twice? Is it idempotent?
-- Are there race conditions if called concurrently?
+### CORRECTNESS - Logic Verification
+- **Business Logic**: Does it match requirements? Edge cases handled?
+- **Type Safety**: Implicit conversions, null/undefined handling
+- **Async Behavior**: Promise rejection, race conditions, deadlocks
+- **State Management**: Mutation bugs, stale closures, memory leaks
 
-**About Dependencies:**
-- What if external services are slow, unavailable, or return errors?
-- What if the database/cache/queue fails mid-operation?
-- What happens with partial failures?
+### RELIABILITY - Failure Mode Analysis
+- **Error Handling**: Uncaught exceptions, error swallowing, retry logic
+- **Resource Management**: Connection leaks, file handle cleanup
+- **Timeout Handling**: Missing timeouts, cascading failures
+- **Graceful Degradation**: Partial failure handling
 
-**About Users:**
-- What if a user clicks rapidly, refreshes, or navigates away mid-operation?
-- What if multiple tabs/sessions interact?
-- What unexpected sequences of actions could users take?
+### MAINTAINABILITY - Code Quality
+- **Complexity**: Cyclomatic complexity > 10, deep nesting
+- **Duplication**: Copy-paste code, missed abstractions
+- **Coupling**: Tight dependencies, god objects
+- **Naming**: Misleading names, unclear intent
 
-**About Side Effects:**
-- What gets written, deleted, or modified?
-- What events get emitted? What if handlers fail?
-- Is cleanup properly handled on all paths?
+### PERFORMANCE - Efficiency Analysis
+- **Algorithm Complexity**: O(n²) in loops, unnecessary iterations
+- **Memory**: Large allocations, unbounded growth, memory leaks
+- **I/O**: N+1 queries, missing pagination, blocking calls
+- **Caching**: Missing cache, cache invalidation issues
 
-### 3. DOCUMENT YOUR FINDINGS
-For issues found:
-- Provide specific file:line location
-- Show the actual problematic code
-- Explain WHY it's a problem
-- Classify severity based on real impact
+## EDGE CASE THINKING (Mandatory)
+For each code section, systematically consider:
 
-For areas verified clean:
-- State what you checked
-- Explain why it's safe
+| Category | Questions to Ask |
+|----------|-----------------|
+| **Inputs** | null? undefined? empty? boundary values? malformed? |
+| **State** | concurrent access? idempotent? partial state? |
+| **Dependencies** | timeout? error response? unavailable? |
+| **Users** | rapid clicks? multiple tabs? unexpected sequence? |
+| **Data** | legacy format? corrupted? exceeds limits? |
 
-### 4. EVIDENCE OVER ASSERTIONS
-Every claim must be backed by code evidence. Don't just state "checked X" - show the code that proves your analysis.`,
+## EVIDENCE REQUIREMENTS
+Every issue MUST include:
+1. **Location**: Exact file:line reference
+2. **Code**: The actual problematic snippet
+3. **Explanation**: WHY this is a problem (not just WHAT)
+4. **Impact**: What could go wrong in production
+5. **Severity Justification**: Why CRITICAL/HIGH/MEDIUM/LOW
 
-  outputTemplate: `## Verification Results
+## SELF-REVIEW CHECKLIST (Before Submitting)
+After completing your analysis, verify:
+- [ ] All 5 categories explicitly covered
+- [ ] Edge cases documented for each function
+- [ ] Every issue has code evidence
+- [ ] Severity matches actual impact
+- [ ] Clean areas have negative assertions
+- [ ] No duplicate issues
+- [ ] No issues without evidence`,
 
-### Discovered Issues
+  outputTemplate: `## Reasoning Trace
+Brief summary of your analysis approach for this verification.
 
-#### [Issue ID]: [Summary]
+## Discovered Issues
+
+### [SEC/COR/REL/MNT/PRF]-[NN]: [Summary]
 - **Category**: [SECURITY/CORRECTNESS/RELIABILITY/MAINTAINABILITY/PERFORMANCE]
 - **Severity**: [CRITICAL/HIGH/MEDIUM/LOW]
 - **Location**: [file:line]
-- **Description**: [What's wrong and why it matters]
+- **Impact**: [What could happen in production]
 - **Evidence**:
 \`\`\`
-[The actual problematic code]
+[Actual code]
 \`\`\`
+- **Why This Matters**: [Explanation of the risk]
 
-### Edge Case Analysis
-Document your thinking about scenarios beyond normal operation:
-- What boundary conditions did you check?
-- What failure scenarios did you consider?
-- What race conditions or state issues did you evaluate?
-- What user behavior edge cases did you think about?
+## Edge Case Analysis
 
-### Verification Coverage
-For each category, state what you verified:
-- **SECURITY**: [What you checked, what you found]
-- **CORRECTNESS**: [What you checked, what you found]
-- **RELIABILITY**: [What you checked, what you found]
-- **MAINTAINABILITY**: [What you checked, what you found]
-- **PERFORMANCE**: [What you checked, what you found]`,
+### [Function/Component Name]
+| Scenario | Checked | Finding |
+|----------|---------|---------|
+| Null input | ✓ | [Issue ID or "Safe - validated at line X"] |
+| Empty array | ✓ | [Issue ID or "Safe - handled at line X"] |
+| Concurrent call | ✓ | [Issue ID or "Safe - no shared state"] |
 
-  exampleOutput: `## Verification Results
+## Category Coverage
 
-### Discovered Issues
+| Category | Areas Checked | Issues Found | Clean Areas |
+|----------|---------------|--------------|-------------|
+| SECURITY | [list] | [IDs] | [what's safe] |
+| CORRECTNESS | [list] | [IDs] | [what's safe] |
+| RELIABILITY | [list] | [IDs] | [what's safe] |
+| MAINTAINABILITY | [list] | [IDs] | [what's safe] |
+| PERFORMANCE | [list] | [IDs] | [what's safe] |
 
-#### SEC-01: SQL Injection via Direct String Interpolation
+## Self-Review Confirmation
+- [x] All categories covered
+- [x] Edge cases documented
+- [x] Evidence provided for all issues`,
+
+  exampleOutput: `## Reasoning Trace
+Analyzing authentication middleware. Following data flow from request → token extraction → validation → user context. Focusing on security and reliability.
+
+## Discovered Issues
+
+### SEC-01: JWT Secret Hardcoded in Source
 - **Category**: SECURITY
 - **Severity**: CRITICAL
-- **Location**: src/db/queries.ts:45
-- **Description**: User-provided ID is directly interpolated into SQL query without parameterization, allowing arbitrary SQL execution.
+- **Location**: src/auth/jwt.ts:12
+- **Impact**: Attacker with source access can forge any JWT token, gaining admin access
 - **Evidence**:
 \`\`\`typescript
-const query = \`SELECT * FROM users WHERE id = \${userId}\`;
+const JWT_SECRET = 'super-secret-key-123';  // HARDCODED
+const token = jwt.sign(payload, JWT_SECRET);
 \`\`\`
+- **Why This Matters**: Secrets in source code get committed to repos, leak via logs, and cannot be rotated without deployment.
 
-### Edge Case Analysis
-**Boundary Conditions:**
-- Checked userId with empty string - query executes with syntax error
-- Checked userId with special characters - SQL injection possible
+### COR-02: Race Condition in Token Refresh
+- **Category**: CORRECTNESS
+- **Severity**: HIGH
+- **Location**: src/auth/refresh.ts:45-52
+- **Impact**: Concurrent refresh requests can invalidate valid tokens, causing logout storms
+- **Evidence**:
+\`\`\`typescript
+async function refreshToken(oldToken: string) {
+  const user = await validateToken(oldToken);  // Check
+  await invalidateToken(oldToken);              // Invalidate
+  return generateToken(user);                   // Generate new
+  // No mutex: concurrent calls both pass validation, both invalidate
+}
+\`\`\`
+- **Why This Matters**: Users with multiple tabs open will randomly get logged out when any tab refreshes.
 
-**Failure Scenarios:**
-- DB connection timeout handled via retry in dbClient
-- Transaction rollback implemented correctly
+### REL-03: Missing Timeout on External Auth Provider
+- **Category**: RELIABILITY
+- **Severity**: MEDIUM
+- **Location**: src/auth/oauth.ts:78
+- **Impact**: Slow OAuth provider response blocks entire auth flow, potentially causing request timeout cascade
+- **Evidence**:
+\`\`\`typescript
+const response = await fetch(oauthProviderUrl);  // No timeout
+\`\`\`
+- **Why This Matters**: External service degradation will cascade to our service. Should have 5s timeout with fallback.
 
-**State/Concurrency:**
-- No shared state modified
-- Function is idempotent for same userId
+## Edge Case Analysis
 
-**User Behavior:**
-- Rapid repeated calls could cause connection pool exhaustion (see PRF-01)
+### validateToken()
+| Scenario | Checked | Finding |
+|----------|---------|---------|
+| Null token | ✓ | Safe - throws 401 at line 23 |
+| Expired token | ✓ | Safe - jwt.verify handles |
+| Malformed JWT | ✓ | Safe - try/catch at line 20 |
+| Token from old secret | ✓ | Issue: fails silently (see SEC-01) |
 
-### Verification Coverage
-- **SECURITY**: Checked input validation, query construction, auth checks. Found SEC-01.
-- **CORRECTNESS**: Logic flow verified, type coercion safe.
-- **RELIABILITY**: Error handling present, retry logic sound.
-- **MAINTAINABILITY**: Function well-structured, reasonable complexity.
-- **PERFORMANCE**: N+1 query risk at line 78 (see PRF-01).`,
+### refreshToken()
+| Scenario | Checked | Finding |
+|----------|---------|---------|
+| Concurrent refresh | ✓ | COR-02 - Race condition |
+| Already invalidated | ✓ | Safe - returns 401 |
+| DB connection lost | ✓ | REL-03 - No retry logic |
+
+## Category Coverage
+
+| Category | Areas Checked | Issues Found | Clean Areas |
+|----------|---------------|--------------|-------------|
+| SECURITY | JWT handling, secret storage, token validation | SEC-01 | CSRF protection OK, XSS headers present |
+| CORRECTNESS | Token lifecycle, refresh logic, validation | COR-02 | User lookup logic verified |
+| RELIABILITY | External calls, DB operations, error handling | REL-03 | Retry logic in DB layer OK |
+| MAINTAINABILITY | Code structure, naming | None | Well-structured, clear separation |
+| PERFORMANCE | Token operations, DB queries | None | Indexed lookups, no N+1 |
+
+## Self-Review Confirmation
+- [x] All categories covered
+- [x] Edge cases documented
+- [x] Evidence provided for all issues`,
 
   checklist: [
-    '□ Did I think about what could go wrong, not just what should work?',
-    '□ Did I consider inputs at boundaries and extremes?',
-    '□ Did I think about concurrent execution and state?',
-    '□ Did I consider external dependency failures?',
-    '□ Did I provide code evidence for my claims?'
+    '□ Did I follow the 5-step reasoning process?',
+    '□ Did I cover ALL 5 categories with explicit findings?',
+    '□ Did I check edge cases systematically (not just happy path)?',
+    '□ Does every issue have file:line + code evidence?',
+    '□ Did I explain WHY each issue matters (impact)?',
+    '□ Did I state what was checked and found clean?',
+    '□ Did I self-review before submitting?'
   ]
 };;;
 
