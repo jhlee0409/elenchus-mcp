@@ -1,6 +1,7 @@
 /**
  * Language Analysis Module
  * [ENH: LANG] Language-agnostic dependency analysis with plugin architecture
+ * [ENH: TREE-SITTER] Multi-language support via tree-sitter WASM
  */
 
 // Types
@@ -17,8 +18,19 @@ export {
   isLanguageSupported,
   getAnalyzerForFile,
   getSupportedExtensions,
-  getRegisteredLanguages
+  getRegisteredLanguages,
+  initTreeSitter,
+  isTreeSitterReady
 } from './registry.js';
 
 // Built-in analyzers
 export { TypeScriptAnalyzer } from './typescript.js';
+
+// Tree-sitter analyzers
+export {
+  treeSitterAnalyzers,
+  getTreeSitterAnalyzerForPath,
+  getTreeSitterAnalyzerById,
+  isTreeSitterSupportedExtension,
+  getTreeSitterSupportedExtensions
+} from './tree-sitter/analyzer.js';

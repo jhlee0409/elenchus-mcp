@@ -1,11 +1,19 @@
 /**
  * Language Analyzer Registry
  * [ENH: LANG] Central registry for language analyzers with detection and fallback
+ * [ENH: TREE-SITTER] Multi-language support via tree-sitter WASM
  */
 
 import * as path from 'path';
 import { LanguageAnalyzer, LanguageDetectionResult, LanguageSupportStatus } from './types.js';
 import { TypeScriptAnalyzer } from './typescript.js';
+import {
+  treeSitterAnalyzers,
+  initTreeSitterAnalyzers
+} from './tree-sitter/analyzer.js';
+
+// Track tree-sitter initialization state
+let treeSitterInitialized = false;
 
 /**
  * Registry of all available language analyzers
@@ -15,8 +23,39 @@ class LanguageRegistry {
   private extensionMap: Map<string, string> = new Map(); // extension -> languageId
 
   constructor() {
-    // Register built-in analyzers
+    // Register built-in TypeScript analyzer as fallback
     this.register(TypeScriptAnalyzer);
+  }
+
+  /**
+   * Initialize tree-sitter analyzers
+   * Call this at server startup for best performance
+   */
+  async initTreeSitter(): Promise<void> {
+    if (treeSitterInitialized) return;
+
+    try {
+      // Initialize tree-sitter with common languages
+      await initTreeSitterAnalyzers();
+
+      // Register all tree-sitter analyzers
+      for (const analyzer of Object.values(treeSitterAnalyzers)) {
+        this.register(analyzer);
+      }
+
+      treeSitterInitialized = true;
+      console.log(`[Elenchus] Tree-sitter initialized with ${Object.keys(treeSitterAnalyzers).length} languages`);
+    } catch (error) {
+      console.error('[Elenchus] Failed to initialize tree-sitter:', error);
+      // Fall back to TypeScript-only mode
+    }
+  }
+
+  /**
+   * Check if tree-sitter is initialized
+   */
+  isTreeSitterReady(): boolean {
+    return treeSitterInitialized;
   }
 
   /**
@@ -172,5 +211,12 @@ export const isLanguageSupported = (filePath: string) => languageRegistry.isSupp
 export const getAnalyzerForFile = (filePath: string) => languageRegistry.getAnalyzerForFile(filePath);
 export const getSupportedExtensions = () => languageRegistry.getSupportedExtensions();
 export const getRegisteredLanguages = () => languageRegistry.getRegisteredLanguages();
+
+/**
+ * Initialize tree-sitter for multi-language support
+ * Call this at server startup
+ */
+export const initTreeSitter = () => languageRegistry.initTreeSitter();
+export const isTreeSitterReady = () => languageRegistry.isTreeSitterReady();
 
 export default languageRegistry;

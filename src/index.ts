@@ -23,6 +23,7 @@ import { tools } from './tools/index.js';
 import { listSessions, getSession } from './state/session.js';
 import { generatePromptContent } from './prompts/index.js';
 import { APP_CONSTANTS } from './config/constants.js';
+import { initTreeSitter } from './mediator/languages/index.js';
 
 // =============================================================================
 // Server Setup
@@ -407,6 +408,13 @@ async function main() {
   // [FIX: REL-02] Register shutdown handlers
   process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+  // [ENH: TREE-SITTER] Initialize multi-language support
+  try {
+    await initTreeSitter();
+  } catch (error) {
+    console.error('[Elenchus] Tree-sitter initialization failed, falling back to TypeScript-only:', error);
+  }
 
   await server.connect(transport);
 
