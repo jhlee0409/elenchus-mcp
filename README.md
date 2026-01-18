@@ -6,7 +6,7 @@
 
 > **Elenchus** (ἔλεγχος): Socrates' method of refutation through systematic questioning - exposing contradictions to reach truth.
 
-[![npm version](https://badge.fury.io/js/%40jhlee0409%2Felenchus-mcp.svg)](https://www.npmjs.com/package/@jhlee0409/elenchus-mcp)
+[![npm version](https://img.shields.io/npm/v/@jhlee0409/elenchus-mcp.svg)](https://www.npmjs.com/package/@jhlee0409/elenchus-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-≥18.0.0-green.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)

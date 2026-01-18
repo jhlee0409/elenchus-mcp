@@ -6,7 +6,7 @@
 
 > **Elenchus** (ἔλεγχος): 체계적 질문을 통해 모순을 드러내어 진실에 도달하는 소크라테스의 논박법.
 
-[![npm version](https://badge.fury.io/js/%40jhlee0409%2Felenchus-mcp.svg)](https://www.npmjs.com/package/@jhlee0409/elenchus-mcp)
+[![npm version](https://img.shields.io/npm/v/@jhlee0409/elenchus-mcp.svg)](https://www.npmjs.com/package/@jhlee0409/elenchus-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-≥18.0.0-green.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
