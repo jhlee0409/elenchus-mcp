@@ -78,6 +78,12 @@ Elenchus is a **Model Context Protocol (MCP) server** that implements adversaria
 - Edge case documentation requirements
 - Negative assertions for clean code
 
+### 🧠 LLM-Based Evaluation (Optional)
+- **Convergence Assessment**: LLM judges verification quality (vs rigid boolean checks)
+- **Severity Classification**: Context-aware impact analysis
+- **Edge Case Validation**: Verifies actual analysis, not just keyword presence
+- **False Positive Detection**: Evidence-based issue validation
+
 ### 🔍 Automatic Impact Analysis
 - **Multi-language dependency graph** (15 languages via tree-sitter)
 - Ripple effect prediction
@@ -247,6 +253,12 @@ Initialize a new verification session.
 - `cacheConfig` (object, optional): Cache previous verifications
 - `chunkingConfig` (object, optional): Split large files into chunks
 - `pipelineConfig` (object, optional): Tiered verification
+- `llmEvalConfig` (object, optional): LLM-based evaluation settings
+  - `enabled`: boolean - Enable LLM evaluation
+  - `convergenceEval`: boolean - Use LLM for convergence quality
+  - `severityEval`: boolean - Use LLM for severity classification
+  - `edgeCaseEval`: boolean - Use LLM for edge case validation
+  - `falsePositiveEval`: boolean - Use LLM for false positive detection
 
 **Returns:** Session ID and initial context including files collected, dependency graph stats, and role configuration.
 
@@ -314,6 +326,49 @@ Query issues with optional filtering.
 - `status` (`"all"` | `"unresolved"` | `"critical"`, optional): Filter by status
 
 **Returns:** Array of issues matching the filter.
+
+### LLM Evaluation
+
+#### `elenchus_evaluate_convergence`
+
+Get LLM evaluation prompt for convergence quality assessment.
+
+**Inputs:**
+- `sessionId` (string, required): Session ID to evaluate
+
+**Returns:** System prompt and user prompt to send to an LLM for quality assessment.
+
+#### `elenchus_evaluate_severity`
+
+Get LLM evaluation prompt for issue severity assessment.
+
+**Inputs:**
+- `sessionId` (string, required): Session ID
+- `issueId` (string, required): Issue ID to evaluate
+- `codeContext` (string, optional): Additional code context
+
+**Returns:** Prompt for LLM to assess if severity is accurate.
+
+#### `elenchus_evaluate_edge_cases`
+
+Get LLM evaluation prompt for edge case coverage.
+
+**Inputs:**
+- `sessionId` (string, required): Session ID to evaluate
+
+**Returns:** Prompt for LLM to assess edge case analysis quality.
+
+#### `elenchus_submit_llm_evaluation`
+
+Submit LLM evaluation response to store results.
+
+**Inputs:**
+- `sessionId` (string, required): Session ID
+- `evaluationType` (`"convergence"` | `"severity"` | `"edgeCases"` | `"falsePositive"`): Type of evaluation
+- `llmResponse` (string, required): LLM response to the evaluation prompt
+- `targetId` (string, optional): Target ID for severity/falsePositive evaluations
+
+**Returns:** Parsed evaluation result and storage confirmation.
 
 ### State Management
 
