@@ -16,7 +16,13 @@ import {
   RoleEnforcementConfig,
   RolePrompt,
   PreviousRoundSummary,
-  ExistingIssueSummary
+  ExistingIssueSummary,
+  // Intent-based types
+  IntentBasedRoleDefinition,
+  SuccessCriterion,
+  RoleConstraint,
+  FocusIntent,
+  isIntentBasedRole
 } from './types.js';
 import {
   ROLE_DEFINITIONS,
@@ -609,4 +615,195 @@ export {
   type DomainDetectionResult,
   type GeneratedCategory,
 } from './meta-prompt.js';
+
+// =============================================================================
+// [ENH: INTENT-BASED] Intent-Based Role Helpers
+// =============================================================================
+
+/**
+ * Check if a role definition uses the intent-based contract pattern
+ */
+export { isIntentBasedRole };
+
+/**
+ * Export intent-based types for external use
+ */
+export type {
+  IntentBasedRoleDefinition,
+  SuccessCriterion,
+  RoleConstraint,
+  FocusIntent
+};
+
+/**
+ * Get focus intents for a role (if intent-based)
+ * Returns semantic descriptions of what the role should focus on
+ */
+export function getRoleFocusIntents(role: VerifierRole): FocusIntent[] {
+  const definition = ROLE_DEFINITIONS[role];
+  if (isIntentBasedRole(definition)) {
+    return definition.focusIntents.filter(fi => fi.enabled);
+  }
+  return [];
+}
+
+/**
+ * Get success criteria for a role (if intent-based)
+ * Returns outcome-based success definitions
+ */
+export function getRoleSuccessCriteria(role: VerifierRole): SuccessCriterion[] {
+  const definition = ROLE_DEFINITIONS[role];
+  if (isIntentBasedRole(definition)) {
+    return definition.successCriteria;
+  }
+  return [];
+}
+
+/**
+ * Get constraints for a role (if intent-based)
+ * Returns guardrails and boundaries
+ */
+export function getRoleConstraints(role: VerifierRole): RoleConstraint[] {
+  const definition = ROLE_DEFINITIONS[role];
+  if (isIntentBasedRole(definition)) {
+    return definition.constraints.filter(c => c.enabled);
+  }
+  return [];
+}
+
+/**
+ * Get self-review prompts for a role (if intent-based)
+ * Returns outcome-focused questions for self-verification
+ */
+export function getRoleSelfReviewPrompts(role: VerifierRole): string[] {
+  const definition = ROLE_DEFINITIONS[role];
+  if (isIntentBasedRole(definition)) {
+    return definition.selfReviewPrompts || [];
+  }
+  return [];
+}
+
+/**
+ * Generate an intent-based prompt section for a role
+ * This creates a LLM-friendly representation of the role's intents
+ */
+export function generateIntentBasedPromptSection(role: VerifierRole): string {
+  const definition = ROLE_DEFINITIONS[role];
+  if (!isIntentBasedRole(definition)) {
+    return '';
+  }
+
+  const sections: string[] = [];
+
+  // Success Criteria Section
+  sections.push('## Success Criteria (What Success Looks Like)');
+  sections.push('');
+  for (const sc of definition.successCriteria.filter(s => s.required)) {
+    sections.push(`- **${sc.description}**`);
+    sections.push(`  _Rationale: ${sc.rationale}_`);
+  }
+  sections.push('');
+
+  // Focus Intents Section
+  sections.push('## Focus Areas (What to Think About)');
+  sections.push('');
+  for (const fi of definition.focusIntents.filter(f => f.enabled)) {
+    sections.push(`### ${fi.name} [${fi.priority.toUpperCase()}]`);
+    sections.push(fi.description);
+    if (fi.examples && fi.examples.length > 0) {
+      sections.push('Examples:');
+      for (const ex of fi.examples) {
+        sections.push(`- ${ex}`);
+      }
+    }
+    sections.push('');
+  }
+
+  // Constraints Section
+  sections.push('## Constraints (Guardrails)');
+  sections.push('');
+  const mustConstraints = definition.constraints.filter(c => c.enabled && c.type === 'must');
+  const mustNotConstraints = definition.constraints.filter(c => c.enabled && c.type === 'must-not');
+
+  if (mustConstraints.length > 0) {
+    sections.push('**Must:**');
+    for (const c of mustConstraints) {
+      sections.push(`- ${c.description}`);
+    }
+    sections.push('');
+  }
+
+  if (mustNotConstraints.length > 0) {
+    sections.push('**Must Not:**');
+    for (const c of mustNotConstraints) {
+      sections.push(`- ${c.description}`);
+    }
+    sections.push('');
+  }
+
+  // Self-Review Section
+  if (definition.selfReviewPrompts && definition.selfReviewPrompts.length > 0) {
+    sections.push('## Self-Review (Before Submitting)');
+    sections.push('');
+    for (const prompt of definition.selfReviewPrompts) {
+      sections.push(`- ${prompt}`);
+    }
+    sections.push('');
+  }
+
+  return sections.join('\n');
+}
+
+/**
+ * Evaluate success criteria against output
+ * Returns which criteria passed/failed with details
+ */
+export function evaluateSuccessCriteria(
+  role: VerifierRole,
+  output: string,
+  context: RoleContext
+): {
+  criterionId: string;
+  description: string;
+  passed: boolean;
+  required: boolean;
+  message?: string;
+}[] {
+  const definition = ROLE_DEFINITIONS[role];
+  if (!isIntentBasedRole(definition)) {
+    return [];
+  }
+
+  const results: {
+    criterionId: string;
+    description: string;
+    passed: boolean;
+    required: boolean;
+    message?: string;
+  }[] = [];
+
+  for (const criterion of definition.successCriteria) {
+    if (criterion.validator) {
+      const validationResult = criterion.validator(output, context);
+      results.push({
+        criterionId: criterion.id,
+        description: criterion.description,
+        passed: validationResult.passed,
+        required: criterion.required,
+        message: validationResult.message
+      });
+    } else {
+      // No validator - cannot automatically evaluate, assume passed
+      results.push({
+        criterionId: criterion.id,
+        description: criterion.description,
+        passed: true,
+        required: criterion.required,
+        message: 'No automated validator - requires manual review'
+      });
+    }
+  }
+
+  return results;
+}
 

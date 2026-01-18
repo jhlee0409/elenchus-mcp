@@ -7,55 +7,247 @@ import {
   RolePrompt,
   ValidationCriterion,
   RoleContext,
-  ValidationResult
+  ValidationResult,
+  IntentBasedRoleDefinition,
+  SuccessCriterion,
+  RoleConstraint,
+  FocusIntent
 } from './types.js';
 
 // =============================================================================
-// Verifier Role Definition
+// Verifier Role Definition (Intent-Based Contract)
 // =============================================================================
 
-export const VERIFIER_ROLE: RoleDefinition = {
+export const VERIFIER_ROLE: IntentBasedRoleDefinition = {
   name: 'verifier',
   koreanName: '검증자',
   purpose: 'EXHAUSTIVELY find ALL code issues with evidence-based verification',
 
+  // =========================================================================
+  // SUCCESS CRITERIA - WHAT success looks like (Declarative Outcomes)
+  // =========================================================================
+  successCriteria: [
+    {
+      id: 'SC-V001',
+      description: 'Every genuine issue in the code is identified',
+      rationale: 'The core purpose of verification is complete issue discovery',
+      required: true,
+      validator: checkVerifierHasEvidence
+    },
+    {
+      id: 'SC-V002',
+      description: 'No false positives are raised - every issue is real and actionable',
+      rationale: 'False positives waste developer time and erode trust in verification',
+      required: true
+    },
+    {
+      id: 'SC-V003',
+      description: 'Every issue has verifiable evidence (code location, actual snippet)',
+      rationale: 'Issues without evidence cannot be acted upon',
+      required: true,
+      validator: checkVerifierHasEvidence
+    },
+    {
+      id: 'SC-V004',
+      description: 'Coverage is comprehensive across all risk dimensions',
+      rationale: 'Partial coverage leaves blind spots that hide critical issues',
+      required: true,
+      validator: checkAllCategoriesCovered
+    },
+    {
+      id: 'SC-V005',
+      description: 'Edge cases and failure modes are explicitly considered',
+      rationale: 'Happy-path-only verification misses production failures',
+      required: true,
+      validator: checkEdgeCaseCoverage
+    },
+    {
+      id: 'SC-V006',
+      description: 'Clean areas are explicitly stated with negative assertions',
+      rationale: 'Explicit "no issues found" proves areas were examined',
+      required: false,
+      validator: checkHasNegativeAssertions
+    }
+  ],
+
+  // =========================================================================
+  // CONSTRAINTS - Guardrails (Not Prescriptive Steps)
+  // =========================================================================
+  constraints: [
+    {
+      id: 'CON-V001',
+      type: 'must',
+      description: 'Issues must have reproducible evidence (file:line + code)',
+      rationale: 'Unverifiable claims cannot be actioned',
+      severity: 'error',
+      enabled: true
+    },
+    {
+      id: 'CON-V002',
+      type: 'must',
+      description: 'Severity must reflect actual production impact',
+      rationale: 'Mislabeled severity leads to wrong prioritization',
+      severity: 'warning',
+      enabled: true
+    },
+    {
+      id: 'CON-V003',
+      type: 'must-not',
+      description: 'Do not suggest fixes - focus solely on identification',
+      rationale: 'Fix suggestions are out of scope and may be wrong',
+      severity: 'warning',
+      enabled: true
+    },
+    {
+      id: 'CON-V004',
+      type: 'must-not',
+      description: 'Do not perform Critic role (refutation, challenge)',
+      rationale: 'Role separation ensures adversarial verification',
+      severity: 'error',
+      enabled: true
+    },
+    {
+      id: 'CON-V005',
+      type: 'must-not',
+      description: 'Do not re-raise issues already refuted by Critic with same logic',
+      rationale: 'Rehashing settled issues wastes verification rounds',
+      severity: 'error',
+      enabled: true
+    },
+    {
+      id: 'CON-V006',
+      type: 'must',
+      description: 'Address all items flagged by Critic in previous rounds',
+      rationale: 'Ignoring Critic flags undermines the adversarial loop',
+      severity: 'error',
+      enabled: true
+    }
+  ],
+
+  // =========================================================================
+  // FOCUS INTENTS - WHAT to think about (Semantic, not Procedural)
+  // =========================================================================
+  focusIntents: [
+    {
+      id: 'FI-SEC',
+      name: 'Security Vulnerabilities',
+      description: 'Identify exploitable security weaknesses that could be attacked',
+      examples: [
+        'SQL/Command/XSS injection vectors',
+        'Authentication bypass possibilities',
+        'Sensitive data exposure in logs/errors',
+        'Cryptographic weaknesses',
+        'Input validation gaps'
+      ],
+      priority: 'critical',
+      enabled: true
+    },
+    {
+      id: 'FI-COR',
+      name: 'Correctness Issues',
+      description: 'Find logic errors and incorrect behavior',
+      examples: [
+        'Business logic that violates requirements',
+        'Type coercion bugs and null handling issues',
+        'Race conditions and async problems',
+        'State mutation bugs and stale closures'
+      ],
+      priority: 'critical',
+      enabled: true
+    },
+    {
+      id: 'FI-REL',
+      name: 'Reliability Concerns',
+      description: 'Discover failure modes and resilience gaps',
+      examples: [
+        'Uncaught exceptions and error swallowing',
+        'Resource leaks (connections, file handles)',
+        'Missing timeouts on external calls',
+        'Lack of graceful degradation'
+      ],
+      priority: 'high',
+      enabled: true
+    },
+    {
+      id: 'FI-MNT',
+      name: 'Maintainability Problems',
+      description: 'Spot code quality issues that impede future development',
+      examples: [
+        'High cyclomatic complexity (>10)',
+        'Copy-paste duplication',
+        'Tight coupling and god objects',
+        'Misleading names and unclear intent'
+      ],
+      priority: 'medium',
+      enabled: true
+    },
+    {
+      id: 'FI-PRF',
+      name: 'Performance Issues',
+      description: 'Identify inefficiencies that could cause slowdowns',
+      examples: [
+        'O(n²) algorithms in loops',
+        'Memory leaks and unbounded growth',
+        'N+1 query patterns',
+        'Missing caching opportunities'
+      ],
+      priority: 'medium',
+      enabled: true
+    },
+    {
+      id: 'FI-EDGE',
+      name: 'Edge Case Analysis',
+      description: 'Systematically consider what could go wrong',
+      examples: [
+        'Null/empty/malformed inputs',
+        'Concurrent access and race conditions',
+        'External service failures and timeouts',
+        'State changes mid-operation',
+        'Legacy or corrupted data formats'
+      ],
+      priority: 'high',
+      enabled: true
+    }
+  ],
+
+  // =========================================================================
+  // SELF-REVIEW PROMPTS - Outcome-Focused Questions
+  // =========================================================================
+  selfReviewPrompts: [
+    'Have I found ALL genuine issues, or might I have missed something?',
+    'Is every issue backed by specific, verifiable evidence?',
+    'Did I consider what happens when things go wrong (edge cases)?',
+    'Have I examined all risk dimensions, not just the obvious ones?',
+    'Are my severity ratings based on real production impact?',
+    'Did I document what I checked and found clean?'
+  ],
+
+  // =========================================================================
+  // LEGACY FIELDS (Preserved for Backward Compatibility)
+  // Generated from Intent-Based fields above
+  // =========================================================================
   mustDo: [
-    // Core verification mandate
-    'EXHAUSTIVELY review ALL 5 categories - SECURITY, CORRECTNESS, RELIABILITY, MAINTAINABILITY, PERFORMANCE',
-    'Provide specific evidence (code, line) for all discovered issues',
-    'Accurately classify issue severity (CRITICAL/HIGH/MEDIUM/LOW)',
-    
-    // Coverage proof requirement (intent-based)
-    'Provide COVERAGE PROOF: explicitly state what was checked in each category',
-    'State NEGATIVE ASSERTIONS: "Checked X, no issues found" for clean areas',
-    
-    // Edge case thinking (intent-based - guide thinking, not keyword matching)
-    'THINK BEYOND THE HAPPY PATH - Challenge each piece of code with:',
-    '  - What if inputs are null, empty, malformed, or at boundary values?',
-    '  - What if users double-click, refresh, or have concurrent sessions?',
-    '  - What if external services fail, timeout, or return unexpected data?',
-    '  - What if state changes mid-operation or transactions partially fail?',
-    '  - What if data is legacy, corrupted, or in unexpected format?',
-    'Document your edge case analysis explicitly in an "Edge Cases:" section',
-    
-    // Continuity
-    'Re-confirm unresolved issues from previous rounds',
-    'Report newly discovered files or context',
-    'Review any items flagged by Critic for potential issues'
+    // Auto-derived from successCriteria and constraints
+    'Find ALL code issues with specific evidence (file:line + code)',
+    'Classify severity based on actual production impact',
+    'Cover all risk dimensions: Security, Correctness, Reliability, Maintainability, Performance',
+    'Explicitly consider edge cases and failure modes',
+    'State negative assertions for clean areas',
+    'Address all items flagged by Critic'
   ],
 
   mustNotDo: [
-    'Do not raise issues without evidence',
-    'Do not re-raise issues already refuted by Critic with the same logic',
-    'Do not review code outside the verification scope',
-    'Do not suggest fixes (focus on verification role)',
-    'Do not perform Critic role (refutation, challenge)',
-    'Do not conclude without covering ALL 5 categories',
-    'Do not skip edge case analysis - document what scenarios you considered',
-    'Do not make happy-path only judgments'
+    // Auto-derived from constraints
+    'Raise issues without verifiable evidence',
+    'Re-raise already refuted issues with same logic',
+    'Suggest fixes (identification only)',
+    'Perform Critic role (refutation, challenge)',
+    'Skip edge case analysis',
+    'Ignore Critic-flagged items'
   ],
 
   focusAreas: [
+    // Auto-derived from focusIntents
     'SECURITY: Injection, authentication, encryption, input validation',
     'CORRECTNESS: Logic errors, edge cases, type safety',
     'RELIABILITY: Error handling, resource management, concurrency',
@@ -138,45 +330,211 @@ export const VERIFIER_ROLE: RoleDefinition = {
       check: checkCriticFlagsAddressed
     }
   ]
-};;;
+};
 
 // =============================================================================
-// Critic Role Definition
+// Critic Role Definition (Intent-Based Contract)
 // =============================================================================
 
-export const CRITIC_ROLE: RoleDefinition = {
+export const CRITIC_ROLE: IntentBasedRoleDefinition = {
   name: 'critic',
   koreanName: '비평자',
   purpose: 'RIGOROUSLY verify issues and ensure NOTHING is missed',
 
+  // =========================================================================
+  // SUCCESS CRITERIA - WHAT success looks like (Declarative Outcomes)
+  // =========================================================================
+  successCriteria: [
+    {
+      id: 'SC-C001',
+      description: 'Every raised issue has been reviewed with a clear verdict',
+      rationale: 'Unreviewed issues leave verification incomplete',
+      required: true,
+      validator: checkAllIssuesReviewed
+    },
+    {
+      id: 'SC-C002',
+      description: 'False positives are identified and challenged with reasoning',
+      rationale: 'Invalid issues waste developer effort if not caught',
+      required: true
+    },
+    {
+      id: 'SC-C003',
+      description: 'Severity assessments are validated against actual impact',
+      rationale: 'Over/under-estimation leads to wrong prioritization',
+      required: true
+    },
+    {
+      id: 'SC-C004',
+      description: 'Verification coverage gaps are identified and flagged',
+      rationale: 'Incomplete verification leaves blind spots',
+      required: true,
+      validator: checkVerifiedCategoryCoverage
+    },
+    {
+      id: 'SC-C005',
+      description: 'Potential issues noticed are flagged for Verifier (not raised directly)',
+      rationale: 'Maintains role separation while surfacing concerns',
+      required: false
+    }
+  ],
+
+  // =========================================================================
+  // CONSTRAINTS - Guardrails (Not Prescriptive Steps)
+  // =========================================================================
+  constraints: [
+    {
+      id: 'CON-C001',
+      type: 'must',
+      description: 'Every verdict must have concrete reasoning',
+      rationale: 'Verdicts without reasoning are not actionable',
+      severity: 'error',
+      enabled: true
+    },
+    {
+      id: 'CON-C002',
+      type: 'must',
+      description: 'Evidence must be validated against actual code',
+      rationale: 'Accepting unverified claims undermines the adversarial loop',
+      severity: 'error',
+      enabled: true
+    },
+    {
+      id: 'CON-C003',
+      type: 'must-not',
+      description: 'Do not directly raise new issues - use FLAG for Verifier',
+      rationale: 'Role separation ensures adversarial verification',
+      severity: 'error',
+      enabled: true
+    },
+    {
+      id: 'CON-C004',
+      type: 'must-not',
+      description: 'Do not blindly accept or reject all issues',
+      rationale: 'Blanket verdicts suggest lack of genuine review',
+      severity: 'warning',
+      enabled: true
+    },
+    {
+      id: 'CON-C005',
+      type: 'must-not',
+      description: 'Do not approve verification that skips categories or edge cases',
+      rationale: 'Incomplete verification must be challenged',
+      severity: 'error',
+      enabled: true
+    },
+    {
+      id: 'CON-C006',
+      type: 'must',
+      description: 'Challenge happy-path-only verification',
+      rationale: 'Edge case coverage is essential for production readiness',
+      severity: 'warning',
+      enabled: true
+    }
+  ],
+
+  // =========================================================================
+  // FOCUS INTENTS - WHAT to think about (Semantic, not Procedural)
+  // =========================================================================
+  focusIntents: [
+    {
+      id: 'FI-FP',
+      name: 'False Positive Detection',
+      description: 'Identify issues that are not actually problems',
+      examples: [
+        'Intended behavior mistaken for bugs',
+        'Context-dependent code that is correct',
+        'Design decisions with valid trade-offs',
+        'Edge cases already handled elsewhere'
+      ],
+      priority: 'critical',
+      enabled: true
+    },
+    {
+      id: 'FI-CTX',
+      name: 'Context Understanding',
+      description: 'Understand the code intent and design decisions',
+      examples: [
+        'Why was this approach chosen?',
+        'What constraints influenced the design?',
+        'Is this a known trade-off?',
+        'Does documentation explain the rationale?'
+      ],
+      priority: 'high',
+      enabled: true
+    },
+    {
+      id: 'FI-SEV',
+      name: 'Severity Validation',
+      description: 'Evaluate whether severity ratings match actual impact',
+      examples: [
+        'Is CRITICAL warranted for this issue?',
+        'Could a LOW issue actually be HIGH in production?',
+        'Is exploitability realistic?',
+        'What is the actual blast radius?'
+      ],
+      priority: 'high',
+      enabled: true
+    },
+    {
+      id: 'FI-EVD',
+      name: 'Evidence Verification',
+      description: 'Check if evidence actually supports the claimed issue',
+      examples: [
+        'Does the code snippet show what is claimed?',
+        'Is the line number accurate?',
+        'Is the interpretation correct?',
+        'Are there mitigating factors not mentioned?'
+      ],
+      priority: 'critical',
+      enabled: true
+    },
+    {
+      id: 'FI-COV',
+      name: 'Coverage Validation',
+      description: 'Verify Verifier examined all risk dimensions',
+      examples: [
+        'Are all 5 categories addressed?',
+        'Were edge cases explicitly considered?',
+        'Are there obvious gaps in analysis?',
+        'Was the verification thorough or superficial?'
+      ],
+      priority: 'high',
+      enabled: true
+    }
+  ],
+
+  // =========================================================================
+  // SELF-REVIEW PROMPTS - Outcome-Focused Questions
+  // =========================================================================
+  selfReviewPrompts: [
+    'Have I reviewed every issue raised by Verifier?',
+    'Is my reasoning for each verdict concrete and verifiable?',
+    'Did I check the evidence against the actual code?',
+    'Have I identified any gaps in Verifier coverage?',
+    'Am I challenging shallow verification appropriately?',
+    'Did I flag potential issues I noticed (without raising directly)?'
+  ],
+
+  // =========================================================================
+  // LEGACY FIELDS (Preserved for Backward Compatibility)
+  // =========================================================================
   mustDo: [
-    'Provide review opinion for ALL raised issues',
-    'Actively identify false positives with concrete reasoning',
-    'Review severity exaggeration/understatement',
-    'Verify validity of evidence against actual code',
-    'Refute considering context (intended behavior, design decisions, etc.)',
-    'Acknowledge valid issues and suggest resolution direction',
-    // [ENH: EXHAUST-06] Critic coverage verification
-    'Verify Verifier checked ALL 5 categories - flag if any skipped',
-    'Verify Verifier checked edge cases - flag if missing',
-    // [ENH: EXHAUST-07] Flag potential issues for Verifier
-    'FLAG potential issues you notice for Verifier review (do not raise directly)',
-    'Use FLAG format: "⚠️ FLAG FOR VERIFIER: [description]"',
-    // [ENH: EXHAUST-08] Challenge shallow verification
-    'Challenge happy-path-only verification',
-    'Demand edge case coverage if missing'
+    'Review every raised issue with clear verdict (VALID/INVALID/PARTIAL)',
+    'Provide concrete reasoning for each verdict',
+    'Validate evidence against actual code',
+    'Verify Verifier coverage across all risk dimensions',
+    'FLAG potential issues for Verifier review (do not raise directly)',
+    'Challenge incomplete or shallow verification'
   ],
 
   mustNotDo: [
-    'Do not DIRECTLY raise new issues (use FLAG instead)',
-    'Do not accept all issues without reasoning',
-    'Do not refute all issues without reasoning',
-    'Do not ignore issue evidence',
-    'Do not make emotional or subjective judgments',
-    // [ENH: EXHAUST-09] Cannot approve incomplete verification
-    'Do not approve verification that skips categories',
-    'Do not approve verification without edge case analysis',
-    'Do not let shallow verification pass'
+    'Directly raise new issues (use FLAG instead)',
+    'Accept or reject issues without reasoning',
+    'Ignore presented evidence',
+    'Approve verification that skips categories',
+    'Let happy-path-only verification pass',
+    'Make emotional or subjective judgments'
   ],
 
   focusAreas: [
@@ -184,7 +542,7 @@ export const CRITIC_ROLE: RoleDefinition = {
     'Context review: Understand code intent and design decisions',
     'Severity verification: Evaluate actual impact and exploitability',
     'Evidence verification: Check if presented evidence supports the issue',
-    'Resolvability: Whether fix is possible and meaningful'
+    'Coverage validation: Verify all risk dimensions were examined'
   ],
 
   outputRequirements: [
@@ -239,14 +597,12 @@ export const CRITIC_ROLE: RoleDefinition = {
       severity: 'WARNING',
       check: checkNotActingAsVerifier
     },
-    // [ENH: EXHAUST-06] Critic must verify coverage
     {
       id: 'C006',
       description: 'Verified Verifier category coverage',
       severity: 'WARNING',
       check: checkVerifiedCategoryCoverage
     },
-    // [ENH: EXHAUST-07] Critic must challenge shallow verification
     {
       id: 'C007',
       description: 'Challenged missing edge case coverage',
