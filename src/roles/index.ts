@@ -42,6 +42,18 @@ export {
   estimateCompressedSavings,
   type CompressedPromptConfig
 } from './compressed-prompts.js';
+// [ENH: I18N] Multi-language prompt templates
+export {
+  VERIFIER_PROMPTS,
+  CRITIC_PROMPTS,
+  detectLanguage,
+  getVerifierPrompt,
+  getCriticPrompt,
+  getRolePrompts,
+  LANGUAGE_METADATA,
+  SUPPORTED_LANGUAGES,
+  type SupportedLanguage
+} from './i18n-prompts.js';
 // [ENH: TOKEN-OPT] Structured output - re-export at bottom
 export {
   VerifierOutputSchema,
