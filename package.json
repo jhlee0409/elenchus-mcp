@@ -50,6 +50,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "tree-sitter-wasm-prebuilt": "^0.0.3",
+    "web-tree-sitter": "^0.26.3",
     "zod": "^3.23.0"
   },
   "devDependencies": {
