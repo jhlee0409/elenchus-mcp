@@ -13,56 +13,21 @@ import {
   Issue,
   Checkpoint,
   ConvergenceStatus,
-  IssueCategory,
   Severity,
   IssueStatus
 } from '../types/index.js';
+// [FIX: SCHEMA-03] Use centralized schemas
+import {
+  IssueStorageSchema,
+  IssueCategoryEnum
+} from '../schemas/index.js';
 
 /**
  * Zod schema for session JSON validation
  * [FIX: COR-01] Validate JSON structure before deserialization
+ * [FIX: SCHEMA-03] Use centralized IssueStorageSchema
  */
-// [ENH: LIFECYCLE] Issue Transition Schema
-const IssueTransitionSchema = z.object({
-  type: z.enum(['DISCOVERED', 'ESCALATED', 'DEMOTED', 'MERGED_INTO', 'SPLIT_FROM', 'INVALIDATED', 'VALIDATED', 'REFINED']),
-  fromStatus: z.enum(['RAISED', 'CHALLENGED', 'RESOLVED', 'UNRESOLVED', 'DISMISSED', 'MERGED', 'SPLIT']),
-  toStatus: z.enum(['RAISED', 'CHALLENGED', 'RESOLVED', 'UNRESOLVED', 'DISMISSED', 'MERGED', 'SPLIT']),
-  fromSeverity: z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']).optional(),
-  toSeverity: z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']).optional(),
-  round: z.number(),
-  reason: z.string(),
-  evidence: z.string().optional(),
-  triggeredBy: z.enum(['verifier', 'critic', 'mediator']),
-  timestamp: z.string()
-});
-
-const IssueSchema = z.object({
-  id: z.string(),
-  category: z.enum(['SECURITY', 'CORRECTNESS', 'RELIABILITY', 'MAINTAINABILITY', 'PERFORMANCE']),
-  severity: z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']),
-  // [ENH: LIFECYCLE] Extended status values
-  status: z.enum(['RAISED', 'CHALLENGED', 'RESOLVED', 'UNRESOLVED', 'DISMISSED', 'MERGED', 'SPLIT']),
-  summary: z.string(),
-  description: z.string(),
-  location: z.string(),
-  evidence: z.string(),
-  suggestedFix: z.string().optional(),
-  raisedInRound: z.number(),
-  challengedInRound: z.number().optional(),
-  resolvedInRound: z.number().optional(),
-  // [ENH: LIFECYCLE] Lifecycle tracking fields
-  transitions: z.array(IssueTransitionSchema).optional(),
-  mergedInto: z.string().optional(),
-  splitFrom: z.string().optional(),
-  splitInto: z.array(z.string()).optional(),
-  relatedIssues: z.array(z.string()).optional(),
-  originalSeverity: z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']).optional(),
-  discoveredDuringDebate: z.boolean().optional(),
-  // [ENH: CRIT-02] Critic review fields
-  criticReviewed: z.boolean().optional(),
-  criticVerdict: z.enum(['VALID', 'INVALID', 'PARTIAL']).optional(),
-  criticReviewRound: z.number().optional()
-});
+const IssueSchema = IssueStorageSchema;
 
 const RoundSchema = z.object({
   number: z.number(),
@@ -82,13 +47,14 @@ const CheckpointSchema = z.object({
 });
 
 // [ENH: FRAMING] Framing Result Schema
+// [FIX: SCHEMA-03] Use centralized IssueCategoryEnum
 const FramingResultSchema = z.object({
   structuredRequest: z.string(),
   verificationAgenda: z.array(z.object({
     id: z.string(),
     title: z.string(),
     description: z.string(),
-    category: z.enum(['SECURITY', 'CORRECTNESS', 'RELIABILITY', 'MAINTAINABILITY', 'PERFORMANCE']),
+    category: IssueCategoryEnum,
     priority: z.enum(['MUST', 'SHOULD', 'COULD']),
     estimatedComplexity: z.enum(['LOW', 'MEDIUM', 'HIGH'])
   })),

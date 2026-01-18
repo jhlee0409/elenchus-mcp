@@ -13,6 +13,8 @@ import { analyzeIssueImpact } from '../mediator/index.js';
 import { IssueTransitionResult, changeSeverity, mergeIssues, splitIssue } from '../lifecycle/index.js';
 import { SubmitRoundSchema } from './schemas.js';
 import { getFreshVerdictPatterns } from '../utils/patterns.js';
+// [FIX: SCHEMA-03] Use centralized resolveDescription helper
+import { resolveDescription, IssueInput } from '../schemas/index.js';
 
 // =============================================================================
 // Types
@@ -61,8 +63,12 @@ export async function processNewIssues(
   for (const { issueData, validationResult, impactAnalysis } of processedResults) {
     evidenceValidation[issueData.id] = validationResult;
 
+    // [FIX: SCHEMA-03] Use centralized resolveDescription helper
+    const description = resolveDescription(issueData as IssueInput);
+
     const issue: Issue = {
       ...issueData,
+      description,  // Use resolved description
       raisedBy: role,
       raisedInRound: session.currentRound + 1,
       status: 'RAISED',

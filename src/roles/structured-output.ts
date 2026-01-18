@@ -4,6 +4,8 @@
  */
 
 import { z } from 'zod';
+// [FIX: SCHEMA-03] Use centralized schema
+import { ConstrainedIssueSchema as CentralizedConstrainedIssueSchema } from '../schemas/index.js';
 
 // =============================================================================
 // Issue Output Schema with Constraints
@@ -11,37 +13,9 @@ import { z } from 'zod';
 
 /**
  * Constrained issue schema - prevents verbose descriptions
+ * [FIX: SCHEMA-03] Re-exported from centralized schemas
  */
-export const ConstrainedIssueSchema = z.object({
-  id: z.string()
-    .regex(/^(SEC|COR|REL|MNT|PRF)-\d{2,3}$/, 'ID format: SEC-01, COR-02, etc.')
-    .describe('Issue ID in format CATEGORY-NN'),
-
-  category: z.enum(['SECURITY', 'CORRECTNESS', 'RELIABILITY', 'MAINTAINABILITY', 'PERFORMANCE'])
-    .describe('One of 5 verification categories'),
-
-  severity: z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'])
-    .describe('Impact severity'),
-
-  summary: z.string()
-    .min(10, 'Summary too short')
-    .max(100, 'Summary max 100 chars')
-    .describe('One-line issue summary'),
-
-  location: z.string()
-    .regex(/^[^:]+:\d+(-\d+)?$/, 'Format: file.ts:42 or file.ts:42-50')
-    .describe('file:line or file:line-line'),
-
-  evidence: z.string()
-    .min(5, 'Evidence required')
-    .max(500, 'Evidence max 500 chars')
-    .describe('Code snippet showing the issue'),
-
-  why: z.string()
-    .min(20, 'Explanation required')
-    .max(300, 'Explanation max 300 chars')
-    .describe('Why this is a problem')
-});
+export const ConstrainedIssueSchema = CentralizedConstrainedIssueSchema;
 
 // =============================================================================
 // Verifier Output Schema

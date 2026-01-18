@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { IssueInputSchema } from '../schemas/index.js';
 
 // =============================================================================
 // Configuration Schemas
@@ -123,15 +124,8 @@ export const SubmitRoundSchema = z.object({
   sessionId: z.string().describe('Session ID'),
   role: z.enum(['verifier', 'critic']).describe('Role of this round'),
   output: z.string().describe('Complete output from the agent'),
-  issuesRaised: z.array(z.object({
-    id: z.string(),
-    category: z.enum(['SECURITY', 'CORRECTNESS', 'RELIABILITY', 'MAINTAINABILITY', 'PERFORMANCE']),
-    severity: z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']),
-    summary: z.string(),
-    location: z.string(),
-    description: z.string(),
-    evidence: z.string()
-  })).optional().describe('New issues raised in this round'),
+  // [FIX: SCHEMA-03] Use centralized IssueInputSchema
+  issuesRaised: z.array(IssueInputSchema).optional().describe('New issues raised in this round'),
   issuesResolved: z.array(z.string()).optional().describe('Issue IDs resolved in this round')
 });
 

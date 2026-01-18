@@ -4,25 +4,15 @@
  */
 
 import { z } from 'zod';
+// [FIX: SCHEMA-03] Use centralized schema
+import { IssueOutputSchema } from '../schemas/index.js';
 
 // =============================================================================
 // Common Schema Components
 // =============================================================================
 
-const IssueSchema = z.object({
-  id: z.string(),
-  category: z.enum(['SECURITY', 'CORRECTNESS', 'RELIABILITY', 'MAINTAINABILITY', 'PERFORMANCE']),
-  severity: z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']),
-  summary: z.string(),
-  location: z.string(),
-  description: z.string(),
-  evidence: z.string().optional(),
-  status: z.enum(['RAISED', 'CHALLENGED', 'RESOLVED', 'DISMISSED', 'MERGED', 'SPLIT']),
-  raisedBy: z.enum(['verifier', 'critic']),
-  raisedInRound: z.number(),
-  criticReviewed: z.boolean().optional(),
-  criticVerdict: z.enum(['VALID', 'INVALID', 'PARTIAL']).optional()
-});
+// [FIX: SCHEMA-03] Re-export centralized IssueSchema for backward compatibility
+const IssueSchema = IssueOutputSchema;
 
 // =============================================================================
 // Output Schemas by Tool
