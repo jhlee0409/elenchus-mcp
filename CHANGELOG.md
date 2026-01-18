@@ -53,10 +53,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Replaces rigid pattern matching with context-aware LLM reasoning
   - Fallback to pattern-based evaluation when LLM unavailable
 
+- **Enhanced Role Prompts** - Improved verification quality
+  - Chain-of-Thought reasoning for systematic verification
+  - Self-Review step for catching missed issues
+  - Dynamic role generation via LLM
+
+- **Test Infrastructure** - Added comprehensive testing setup
+  - Vitest configuration with coverage support
+  - Unit tests for core modules
+
 ### Changed
 - **Role Prompt Selection** - Now considers language preference
   - `getRolePrompt()` accepts `language` option
   - Falls back to English if language not specified
+
+- **Role Definitions Refactored** - Intent Contract pattern
+  - Separated intent (what to achieve) from implementation (how)
+  - Clearer role responsibilities and boundaries
+
+- **Configuration Separation** - User output vs LLM context limits
+  - `USER_OUTPUT_LIMITS`: Controls what users see (shorter)
+  - `LLM_CONTEXT_LIMITS`: Controls LLM context window (larger)
+
+### Refactored
+- **Type System Unification** - Zod schemas for type safety
+  - Unified runtime validation with TypeScript types
+  - Single source of truth for all schemas
 
 ---
 
@@ -222,6 +244,7 @@ Or use the `/verify` or `/complete` prompts which guide this workflow automatica
 - Full API documentation for all tools
 - Installation guides (npm, npx, source)
 
+[1.2.0]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.2.0
 [1.1.4]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.1.4
 [1.1.3]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.1.3
 [1.1.2]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.1.2
