@@ -469,7 +469,7 @@ export async function startSession(
         mustDo: getRoleDefinition('verifier').mustDo.slice(0, ROLE_CONSTANTS.MAX_GUIDELINES_SHOWN),
         mustNotDo: getRoleDefinition('verifier').mustNotDo.slice(0, ROLE_CONSTANTS.MAX_GUIDELINES_SHOWN)
       },
-      firstRolePrompt: verifierPrompt.systemPrompt.slice(0, DISPLAY_CONSTANTS.MAX_ROLE_PROMPT_PREVIEW) + '...'
+      firstRolePrompt: verifierPrompt.systemPrompt.slice(0, ROLE_CONSTANTS.MAX_PROMPT_PREVIEW_LENGTH) + '...'
     },
     verificationMode: args.verificationMode ? {
       mode: args.verificationMode.mode || 'standard',

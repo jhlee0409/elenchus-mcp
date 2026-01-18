@@ -290,32 +290,65 @@ export const CONVERGENCE_CONSTANTS = {
 } as const;
 
 // =============================================================================
-// Display / Output Limits
+// Display / Output Limits (User-Facing)
 // =============================================================================
 
+/**
+ * Simple tier-based limits for user-facing tool output displays.
+ * These limits affect only what users SEE in tool responses, not what the LLM processes.
+ * Safe to adjust based on user preference for verbosity.
+ */
+export const OUTPUT_TIERS = {
+  /** Minimal display: 2-3 items (e.g., unreviewed callers, examples) */
+  TINY: 2,
+  /** Small display: 3-5 items (e.g., recommendations, guidelines) */
+  SMALL: 3,
+  /** Medium display: 5 items (e.g., unreviewed files, high-risk files) */
+  MEDIUM: 5,
+  /** Standard display: 10 items (e.g., pre-analysis, tier files) */
+  STANDARD: 10,
+  /** Large display: 15 items (e.g., chunks, signatures) */
+  LARGE: 15,
+  /** Extra large display: 20 items (e.g., cached files, scan lines) */
+  XLARGE: 20,
+} as const;
+
+// =============================================================================
+// LLM Context Limits - CAUTION: Affects Verification Quality
+// =============================================================================
+
+/**
+ * Limits for LLM context/input. These affect what the LLM can "see" and analyze.
+ *
+ * WARNING: Fixed truncation can cause the LLM to miss important context.
+ * Best practices from research:
+ * - Prefer importance-based prioritization over fixed truncation
+ * - Use dynamic token budgets based on content complexity
+ * - Place important content at the beginning (avoid "lost-in-the-middle" effect)
+ * - Operate at ~75% context utilization (not 90%+) for optimal quality
+ */
+export const LLM_CONTEXT_LIMITS = {
+  /** Maximum characters for context truncation. Consider dynamic token budget instead. */
+  CONTEXT_TRUNCATION_CHARS: 2000,
+  /** Maximum files to include in LLM evaluation. Prioritize by importance when exceeding. */
+  MAX_FILES_FOR_EVALUATION: 20,
+  /** Maximum lines to scan for signature detection */
+  MAX_LINES_FOR_SIGNATURE_SCAN: 20,
+} as const;
+
+// Legacy alias for backward compatibility during migration
 export const DISPLAY_CONSTANTS = {
-  /** Maximum files to show in pre-analysis */
-  MAX_PREANALYSIS_FILES: 10,
-  /** Maximum cached file paths to show */
-  MAX_CACHED_FILES_SHOWN: 20,
-  /** Maximum chunks to show */
-  MAX_CHUNKS_SHOWN: 15,
-  /** Maximum files for tier to show */
-  MAX_TIER_FILES_SHOWN: 10,
-  /** Maximum recommended actions to show */
-  MAX_RECOMMENDED_ACTIONS: 3,
-  /** Maximum unreviewed callers to show */
-  MAX_UNREVIEWED_CALLERS_SHOWN: 2,
-  /** Maximum unreviewed files to show */
-  MAX_UNREVIEWED_FILES_SHOWN: 5,
-  /** Maximum impact recommendations to show */
-  MAX_IMPACT_RECOMMENDATIONS_SHOWN: 3,
-  /** Maximum initial lines to scan for signatures */
-  MAX_INITIAL_LINES_SCAN: 20,
-  /** Maximum signatures to show */
-  MAX_SIGNATURES_SHOWN: 15,
-  /** Context truncation limit */
-  CONTEXT_TRUNCATION_LIMIT: 2000,
+  MAX_PREANALYSIS_FILES: OUTPUT_TIERS.STANDARD,
+  MAX_CACHED_FILES_SHOWN: OUTPUT_TIERS.XLARGE,
+  MAX_CHUNKS_SHOWN: OUTPUT_TIERS.LARGE,
+  MAX_TIER_FILES_SHOWN: OUTPUT_TIERS.STANDARD,
+  MAX_RECOMMENDED_ACTIONS: OUTPUT_TIERS.SMALL,
+  MAX_UNREVIEWED_CALLERS_SHOWN: OUTPUT_TIERS.TINY,
+  MAX_UNREVIEWED_FILES_SHOWN: OUTPUT_TIERS.MEDIUM,
+  MAX_IMPACT_RECOMMENDATIONS_SHOWN: OUTPUT_TIERS.SMALL,
+  MAX_INITIAL_LINES_SCAN: LLM_CONTEXT_LIMITS.MAX_LINES_FOR_SIGNATURE_SCAN,
+  MAX_SIGNATURES_SHOWN: OUTPUT_TIERS.LARGE,
+  CONTEXT_TRUNCATION_LIMIT: LLM_CONTEXT_LIMITS.CONTEXT_TRUNCATION_CHARS,
 } as const;
 
 // =============================================================================
