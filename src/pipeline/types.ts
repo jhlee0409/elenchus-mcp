@@ -78,6 +78,9 @@ export interface PipelineState {
     reason: string;
     files: string[];
   }>;
+  // [ENH: TOKEN-BUDGET] Token budget enforcement
+  tokenBudgetExceeded?: boolean;
+  tokenBudgetWarning?: string;
 }
 
 /**
@@ -92,10 +95,14 @@ export interface PipelineConfig {
   escalationRules: EscalationRule[];
   // Tier-specific configs
   tierConfigs: Record<VerificationTier, TierConfig>;
-  // Maximum total tokens
+  // Token budget (soft guideline - warning only)
   maxTotalTokens: number;
+  // [ENH: TOKEN-OPT] Token budget mode: 'soft' (warning only) or 'hard' (block escalation)
+  enforceTokenBudget: boolean;
   // Skip to exhaustive for certain file patterns
   exhaustivePatterns: string[];
+  // [ENH: QUALITY-FIRST] Quality takes precedence over token limits
+  qualityFirst?: boolean;
 }
 
 /**
@@ -142,6 +149,7 @@ export const DEFAULT_TIER_CONFIGS: Record<VerificationTier, TierConfig> = {
 
 /**
  * Default pipeline configuration
+ * [ENH: TOKEN-OPT] Quality-first approach: soft token limits, optimize prompts instead
  */
 export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
   enabled: false,
@@ -162,6 +170,8 @@ export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
     }
   ],
   tierConfigs: DEFAULT_TIER_CONFIGS,
-  maxTotalTokens: 50000,
-  exhaustivePatterns: ['**/auth/**', '**/security/**', '**/payment/**']
+  maxTotalTokens: 100000,  // [ENH: TOKEN-OPT] Soft guideline only (doubled from 50k)
+  enforceTokenBudget: false,  // [ENH: TOKEN-OPT] Disabled - use prompt optimization instead
+  exhaustivePatterns: ['**/auth/**', '**/security/**', '**/payment/**'],
+  qualityFirst: true  // [ENH: QUALITY-FIRST] Never sacrifice quality for token limits
 };

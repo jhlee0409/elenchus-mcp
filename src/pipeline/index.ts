@@ -137,6 +137,26 @@ export function completeTier(
   state.totalTokensUsed += result.tokensUsed;
   state.totalTimeMs += result.timeMs;
 
+  // [ENH: TOKEN-OPT] Token budget check - soft guideline by default
+  const budgetUsage = state.totalTokensUsed / config.maxTotalTokens;
+
+  if (budgetUsage >= 1.0) {
+    state.tokenBudgetExceeded = true;
+    // Only block escalation if enforceTokenBudget=true AND qualityFirst=false
+    if (config.enforceTokenBudget && !config.qualityFirst) {
+      state.tokenBudgetWarning = `Token budget exceeded: ${state.totalTokensUsed}/${config.maxTotalTokens}. Escalation blocked.`;
+      shouldEscalate = false;
+      nextTier = undefined;
+      escalationReason = state.tokenBudgetWarning;
+    } else {
+      // Soft warning only - quality takes precedence
+      state.tokenBudgetWarning = `Token budget exceeded: ${state.totalTokensUsed}/${config.maxTotalTokens} (${Math.round(budgetUsage * 100)}%). Continuing for quality.`;
+    }
+  } else if (budgetUsage >= 0.8) {
+    // Warning at 80% usage (always shown)
+    state.tokenBudgetWarning = `Token budget warning: ${state.totalTokensUsed}/${config.maxTotalTokens} (${Math.round(budgetUsage * 100)}% used)`;
+  }
+
   // Record escalation
   if (shouldEscalate && nextTier) {
     state.escalations.push({

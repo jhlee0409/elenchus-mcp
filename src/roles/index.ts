@@ -24,7 +24,7 @@ import {
   VERIFIER_ROLE,
   CRITIC_ROLE
 } from './definitions.js';
-import { Session, Issue } from '../types/index.js';
+import { Session } from '../types/index.js';
 import {
   shouldUseConciseMode,
   getConciseVerifierPrompt,
@@ -33,6 +33,24 @@ import {
   ConciseModeConfig,
   DEFAULT_CONCISE_CONFIG
 } from './concise-prompts.js';
+// [ENH: TOKEN-OPT] Compressed prompts - re-export at bottom
+export {
+  getCompressedPrompt,
+  COMPRESSED_VERIFIER_PROMPT,
+  COMPRESSED_CRITIC_PROMPT,
+  DEFAULT_COMPRESSED_CONFIG,
+  estimateCompressedSavings,
+  type CompressedPromptConfig
+} from './compressed-prompts.js';
+// [ENH: TOKEN-OPT] Structured output - re-export at bottom
+export {
+  VerifierOutputSchema,
+  CriticOutputSchema,
+  getStructuredOutputInstruction,
+  validateVerifierOutput,
+  validateCriticOutput,
+  estimateStructuredTokenSavings
+} from './structured-output.js';
 
 // =============================================================================
 // State Management
@@ -334,7 +352,7 @@ function calculateComplianceScore(
 function generateSuggestions(
   role: VerifierRole,
   violations: RoleViolation[],
-  warnings: RoleWarning[]
+  _warnings: RoleWarning[]
 ): string[] {
   const suggestions: string[] = [];
   const prompt = ROLE_PROMPTS[role];
@@ -513,3 +531,4 @@ export {
   ROLE_DEFINITIONS,
   ROLE_PROMPTS
 };
+

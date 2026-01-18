@@ -104,13 +104,27 @@ export interface ChunkingResult {
 
 /**
  * Default chunking configuration
+ * [ENH: TOKEN-OPT] Enabled by default for selective context inclusion
  */
 export const DEFAULT_CHUNKING_CONFIG: ChunkingConfig = {
-  enabled: false,
+  enabled: true,  // [ENH: TOKEN-OPT] Now enabled by default
   maxTokensPerChunk: 2000,
   includeRelated: true,
   maxRelatedDepth: 1,
   priorityCategories: ['SECURITY', 'CORRECTNESS'],
   alwaysIncludeTypes: ['function', 'method', 'class'],
   minSymbolTokensToChunk: 50
+};
+
+/**
+ * Aggressive chunking configuration for maximum token savings
+ */
+export const AGGRESSIVE_CHUNKING_CONFIG: ChunkingConfig = {
+  enabled: true,
+  maxTokensPerChunk: 1000,  // Smaller chunks
+  includeRelated: false,    // Only direct chunks
+  maxRelatedDepth: 0,
+  priorityCategories: ['SECURITY', 'CORRECTNESS'],
+  alwaysIncludeTypes: ['function', 'method'],  // Skip classes initially
+  minSymbolTokensToChunk: 30
 };
