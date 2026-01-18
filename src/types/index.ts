@@ -193,10 +193,18 @@ export interface VerificationAgendaItem {
   estimatedComplexity: 'LOW' | 'MEDIUM' | 'HIGH';
 }
 
+// [ENH: DELTA-STORAGE] Context delta for efficient round storage
+export interface ContextDelta {
+  addedFiles: string[];      // Files added in this round
+  removedFiles: string[];    // Files removed (rare)
+  baseRound: number;         // Reference to base context round
+}
+
 export interface Round {
   number: number;
   role: RoundRole;
-  input: string;
+  // [ENH: DELTA-STORAGE] Support both full input and delta reference
+  input: string | ContextDelta;
   output: string;
   timestamp: string;
   issuesRaised: string[];
@@ -259,6 +267,35 @@ export interface Session {
     startRound: number;
     wordLimit: number;
     strictFormat: boolean;
+  };
+  // [ENH: CAT-CACHE] Category mention cache for O(1) convergence check
+  mentionedCategories?: Set<IssueCategory>;
+  // [ENH: PIPELINE-PERSIST] Pipeline state for persistence across restarts
+  pipelineState?: {
+    currentTier: 'screen' | 'focused' | 'exhaustive';
+    completedTiers: Array<'screen' | 'focused' | 'exhaustive'>;
+    tierResults: Array<{
+      tier: 'screen' | 'focused' | 'exhaustive';
+      filesVerified: number;
+      issuesFound: number;
+      criticalIssues: number;
+      highIssues: number;
+      tokensUsed: number;
+      timeMs: number;
+      shouldEscalate: boolean;
+      escalationReason?: string;
+      escalationScope?: string[];
+    }>;
+    totalTokensUsed: number;
+    totalTimeMs: number;
+    escalations: Array<{
+      fromTier: 'screen' | 'focused' | 'exhaustive';
+      toTier: 'screen' | 'focused' | 'exhaustive';
+      reason: string;
+      files: string[];
+    }>;
+    tokenBudgetExceeded?: boolean;
+    tokenBudgetWarning?: string;
   };
 }
 

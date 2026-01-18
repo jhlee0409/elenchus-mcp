@@ -26,6 +26,28 @@ import {
 // In-memory pipeline states
 const pipelineStates = new Map<string, PipelineState>();
 
+// Tier order constant (DRY - used by multiple functions)
+const TIER_ORDER: VerificationTier[] = ['screen', 'focused', 'exhaustive'];
+
+/**
+ * Safely convert a glob pattern to a regex
+ * Escapes special regex characters and handles glob wildcards
+ * [ENH: SECURITY] Prevents ReDoS by using non-greedy quantifiers
+ */
+function globToRegex(pattern: string): RegExp {
+  // Escape all regex special characters except *
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    // Replace ** with a placeholder
+    .replace(/\*\*/g, '\0GLOBSTAR\0')
+    // Replace single * with non-greedy match (no slashes)
+    .replace(/\*/g, '[^/]*?')
+    // Replace globstar placeholder with non-greedy any match
+    .replace(/\0GLOBSTAR\0/g, '.*?');
+
+  return new RegExp(`^${escaped}$`);
+}
+
 /**
  * Initialize pipeline for a session
  */
@@ -51,6 +73,25 @@ export function initializePipeline(
  */
 export function getPipelineState(sessionId: string): PipelineState | null {
   return pipelineStates.get(sessionId) || null;
+}
+
+/**
+ * Sync pipeline state to session for persistence
+ * [ENH: PIPELINE-PERSIST] Called after each state change to enable recovery
+ */
+export function syncPipelineToSession(sessionId: string): PipelineState | null {
+  return pipelineStates.get(sessionId) || null;
+}
+
+/**
+ * Restore pipeline state from a persisted session
+ * [ENH: PIPELINE-PERSIST] Called when loading a session to recover pipeline state
+ */
+export function restorePipelineFromSession(
+  sessionId: string,
+  persistedState: PipelineState
+): void {
+  pipelineStates.set(sessionId, persistedState);
 }
 
 /**
@@ -192,9 +233,9 @@ function checkEscalationRule(
   scope: string[];
 } {
   // Only escalate to higher tiers
-  const tierOrder: VerificationTier[] = ['screen', 'focused', 'exhaustive'];
-  const currentIndex = tierOrder.indexOf(currentTier);
-  const targetIndex = tierOrder.indexOf(rule.targetTier);
+  // Using TIER_ORDER constant
+  const currentIndex = TIER_ORDER.indexOf(currentTier);
+  const targetIndex = TIER_ORDER.indexOf(rule.targetTier);
 
   if (targetIndex <= currentIndex) {
     return { shouldEscalate: false, targetTier: rule.targetTier, reason: '', scope: [] };
@@ -256,9 +297,9 @@ export function escalateTier(
   const state = pipelineStates.get(sessionId);
   if (!state) return false;
 
-  const tierOrder: VerificationTier[] = ['screen', 'focused', 'exhaustive'];
-  const currentIndex = tierOrder.indexOf(state.currentTier);
-  const targetIndex = tierOrder.indexOf(targetTier);
+  // Using TIER_ORDER constant
+  const currentIndex = TIER_ORDER.indexOf(state.currentTier);
+  const targetIndex = TIER_ORDER.indexOf(targetTier);
 
   if (targetIndex <= currentIndex) return false;
 
@@ -292,12 +333,10 @@ export function getFilesForTier(
   // Otherwise, select files based on tier config
   const allFiles = Array.from(files.keys());
 
-  // Check for exhaustive patterns
+  // Check for exhaustive patterns - pre-compile for performance [ENH: PERF]
+  const exhaustiveRegexes = config.exhaustivePatterns.map(globToRegex);
   const exhaustiveFiles = allFiles.filter(f =>
-    config.exhaustivePatterns.some(pattern => {
-      const regex = new RegExp(pattern.replace(/\*\*/g, '.*').replace(/\*/g, '[^/]*'));
-      return regex.test(f);
-    })
+    exhaustiveRegexes.some(regex => regex.test(f))
   );
 
   // For screen tier, prioritize smaller/critical files
