@@ -98,6 +98,40 @@ export function getMediatorState(sessionId: string): MediatorState | undefined {
   return mediatorStates.get(sessionId);
 }
 
+/**
+ * [ENH: CACHE-INVALIDATE] Invalidate cached importance when context expands
+ * Should be called when new files are discovered/added to context
+ */
+export async function invalidateCachedImportance(
+  sessionId: string,
+  newFiles: string[],
+  workingDir: string
+): Promise<void> {
+  const state = mediatorStates.get(sessionId);
+  if (!state || newFiles.length === 0) return;
+
+  // Rebuild dependency graph with new files
+  const allFiles = [
+    ...Array.from(state.graph.nodes.keys()),
+    ...newFiles
+  ];
+
+  state.graph = await buildDependencyGraph(allFiles, workingDir);
+
+  // Recalculate critical files
+  const importance = calculateFileImportance(state.graph);
+  const criticalThreshold = Math.max(...Array.from(importance.values())) * MEDIATOR_CONFIG.CRITICAL_THRESHOLD_FACTOR;
+
+  // Add newly critical files to unverified list
+  for (const [file, score] of importance) {
+    if (score >= criticalThreshold && !state.coverage.verifiedFiles.has(file)) {
+      if (!state.coverage.unverifiedCritical.includes(file)) {
+        state.coverage.unverifiedCritical.push(file);
+      }
+    }
+  }
+}
+
 // =============================================================================
 // Active Intervention Logic
 // =============================================================================

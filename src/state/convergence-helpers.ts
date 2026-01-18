@@ -135,11 +135,13 @@ export function aggregateIssues(
 
 /**
  * Calculate category coverage from aggregated counts
+ * [ENH: CAT-CACHE] Uses session.mentionedCategories cache if available for O(1) lookup
  */
 export function calculateCategoryCoverage(
   categoryCounts: Record<IssueCategory, number>,
   rounds: Round[],
-  issues: Issue[]
+  issues: Issue[],
+  mentionedCategoriesCache?: Set<IssueCategory>
 ): CategoryCoverageResult {
   const categories: IssueCategory[] = [
     'SECURITY', 'CORRECTNESS', 'RELIABILITY', 'MAINTAINABILITY', 'PERFORMANCE'
@@ -155,9 +157,11 @@ export function calculateCategoryCoverage(
   const uncoveredCategories: IssueCategory[] = [];
   for (const cat of categories) {
     const hasIssueInCategory = issues.some(i => i.category === cat);
-    const categoryMentionedExplicitly = rounds.some(r =>
-      r.output.toUpperCase().includes(cat)
-    );
+
+    // [ENH: CAT-CACHE] Use cache if available, otherwise scan rounds
+    const categoryMentionedExplicitly = mentionedCategoriesCache
+      ? mentionedCategoriesCache.has(cat)
+      : rounds.some(r => r.output.toUpperCase().includes(cat));
 
     if (!hasIssueInCategory && !categoryMentionedExplicitly) {
       uncoveredCategories.push(cat);
@@ -169,6 +173,28 @@ export function calculateCategoryCoverage(
     allCategoriesExamined: uncoveredCategories.length === 0,
     uncoveredCategories
   };
+}
+
+/**
+ * [ENH: CAT-CACHE] Extract mentioned categories from round output and update cache
+ */
+export function updateCategoryMentionCache(
+  output: string,
+  existingCache?: Set<IssueCategory>
+): Set<IssueCategory> {
+  const cache = existingCache || new Set<IssueCategory>();
+  const categories: IssueCategory[] = [
+    'SECURITY', 'CORRECTNESS', 'RELIABILITY', 'MAINTAINABILITY', 'PERFORMANCE'
+  ];
+  const upperOutput = output.toUpperCase();
+
+  for (const cat of categories) {
+    if (upperOutput.includes(cat)) {
+      cache.add(cat);
+    }
+  }
+
+  return cache;
 }
 
 /**
@@ -272,6 +298,7 @@ export function calculateImpactCoverage(
 
 /**
  * Determine convergence status based on verification mode
+ * [ENH: SINGLE-ROUND] Supports stableRoundsRequired: 0 for true single-round convergence
  */
 export function evaluateConvergence(
   session: Session,
@@ -285,18 +312,25 @@ export function evaluateConvergence(
   const mode = session.verificationMode?.mode || 'standard';
   const minRounds = session.verificationMode?.minRounds ??
     (mode === 'standard' ? 3 : mode === 'fast-track' ? 1 : 1);
+  // [ENH: SINGLE-ROUND] Allow stableRoundsRequired: 0 for immediate convergence
   const stableRoundsRequired = session.verificationMode?.stableRoundsRequired ??
-    (mode === 'standard' ? 2 : 1);
+    (mode === 'standard' ? 2 : mode === 'fast-track' ? 0 : 0);
 
-  const { criticalUnresolved, highUnresolved, recentTransitions } = aggregation;
+  const { criticalUnresolved, highUnresolved, recentTransitions, unresolvedIssues } = aggregation;
   const issuesStabilized = recentTransitions === 0;
   const canFastTrack = mode === 'fast-track' || mode === 'single-pass';
+
+  // [ENH: SINGLE-ROUND] Check if stable rounds requirement is met
+  // When stableRoundsRequired is 0, only check that no new issues in current round
+  const stableRoundsMet = stableRoundsRequired === 0
+    ? (unresolvedIssues === 0 || roundsWithoutNewIssues >= 1)
+    : roundsWithoutNewIssues >= stableRoundsRequired;
 
   // Standard convergence
   const standardConvergence =
     criticalUnresolved === 0 &&
     highUnresolved === 0 &&
-    roundsWithoutNewIssues >= stableRoundsRequired &&
+    stableRoundsMet &&
     session.currentRound >= minRounds &&
     allCategoriesExamined &&
     issuesStabilized &&
@@ -308,7 +342,7 @@ export function evaluateConvergence(
     return { isConverged: true, convergenceType: 'standard' };
   }
 
-  // Fast-track convergence
+  // Fast-track convergence - [ENH: SINGLE-ROUND] true single-round when no issues
   const fastTrackConvergence =
     canFastTrack &&
     criticalUnresolved === 0 &&
@@ -316,7 +350,7 @@ export function evaluateConvergence(
     allCategoriesExamined &&
     hasEdgeCaseCoverage &&
     hasNegativeAsserts &&
-    session.currentRound >= 1;
+    session.currentRound >= minRounds;
 
   if (fastTrackConvergence && mode === 'fast-track') {
     return { isConverged: true, convergenceType: 'fast-track' };

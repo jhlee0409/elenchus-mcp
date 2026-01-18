@@ -347,3 +347,111 @@ export const DEFAULT_SAMPLING_CONFIG: SamplingConfig = {
   neverSamplePatterns: ['**/*.test.*', '**/__tests__/**'],
   historicalBoost: 1.5
 };
+
+// =============================================================================
+// [ENH: AUTO-SAFEGUARDS] Auto-activation configuration
+// =============================================================================
+
+/**
+ * Configuration for automatic safeguards activation when optimizations are enabled
+ */
+export interface SafeguardsAutoActivationConfig {
+  /** When true, safeguards are automatically enabled with any optimization module */
+  autoEnableWithOptimizations: boolean;
+  /** Override sampling rate when differential is enabled */
+  differentialSamplingRate: number;
+  /** Override sampling rate when cache is enabled */
+  cacheSamplingRate: number;
+  /** Override sampling rate when pipeline tiering is enabled */
+  pipelineSamplingRate: number;
+  /** Extended patterns to always verify fully (beyond security/auth/payment) */
+  extendedAlwaysFullPatterns: string[];
+  /** Force periodic full verification threshold when using optimizations */
+  optimizedIncrementalThreshold: number;
+}
+
+export const DEFAULT_AUTO_ACTIVATION_CONFIG: SafeguardsAutoActivationConfig = {
+  autoEnableWithOptimizations: true,
+  differentialSamplingRate: 15,  // Higher sampling when differential is active
+  cacheSamplingRate: 12,         // Moderate increase for cache
+  pipelineSamplingRate: 10,      // Standard for pipeline
+  extendedAlwaysFullPatterns: [
+    '**/utils/**',
+    '**/helpers/**',
+    '**/common/**',
+    '**/shared/**',
+    '**/core/**'
+  ],
+  optimizedIncrementalThreshold: 3  // More frequent full verification when optimized
+};
+
+/**
+ * Get effective safeguards config based on active optimizations
+ */
+export function getEffectiveSafeguardsConfig(
+  baseConfig: {
+    periodic: PeriodicVerificationConfig;
+    confidence: ConfidenceConfig;
+    sampling: SamplingConfig;
+  },
+  activeOptimizations: {
+    differential?: boolean;
+    cache?: boolean;
+    chunking?: boolean;
+    pipeline?: boolean;
+  },
+  autoConfig: SafeguardsAutoActivationConfig = DEFAULT_AUTO_ACTIVATION_CONFIG
+): {
+  periodic: PeriodicVerificationConfig;
+  confidence: ConfidenceConfig;
+  sampling: SamplingConfig;
+} {
+  if (!autoConfig.autoEnableWithOptimizations) {
+    return baseConfig;
+  }
+
+  const anyOptimizationActive = Object.values(activeOptimizations).some(v => v);
+  if (!anyOptimizationActive) {
+    return baseConfig;
+  }
+
+  // Calculate effective sampling rate (use highest applicable)
+  let effectiveSamplingRate = baseConfig.sampling.rate;
+  if (activeOptimizations.differential) {
+    effectiveSamplingRate = Math.max(effectiveSamplingRate, autoConfig.differentialSamplingRate);
+  }
+  if (activeOptimizations.cache) {
+    effectiveSamplingRate = Math.max(effectiveSamplingRate, autoConfig.cacheSamplingRate);
+  }
+  if (activeOptimizations.pipeline) {
+    effectiveSamplingRate = Math.max(effectiveSamplingRate, autoConfig.pipelineSamplingRate);
+  }
+
+  // Merge always-full patterns
+  const mergedPatterns = [
+    ...new Set([
+      ...baseConfig.periodic.alwaysFullPatterns,
+      ...autoConfig.extendedAlwaysFullPatterns
+    ])
+  ];
+
+  return {
+    periodic: {
+      ...baseConfig.periodic,
+      enabled: true,  // Force enable
+      incrementalThreshold: Math.min(
+        baseConfig.periodic.incrementalThreshold,
+        autoConfig.optimizedIncrementalThreshold
+      ),
+      alwaysFullPatterns: mergedPatterns
+    },
+    confidence: {
+      ...baseConfig.confidence
+    },
+    sampling: {
+      ...baseConfig.sampling,
+      enabled: true,  // Force enable
+      rate: effectiveSamplingRate
+    }
+  };
+}
