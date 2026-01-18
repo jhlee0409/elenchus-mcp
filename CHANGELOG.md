@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] - 2026-01-18
+
+### Fixed
+- **Pipeline Security: ReDoS Prevention** - Fixed unsafe glob-to-regex conversion
+  - Added `globToRegex()` function with proper special character escaping
+  - Use non-greedy quantifiers (`.*?`) to prevent exponential backtracking
+  - Patterns like `**/**/**/**` no longer cause ReDoS vulnerability
+- **Pipeline Performance: Regex Pre-compilation** - Optimize pattern matching
+  - Pre-compile `exhaustivePatterns` before file iteration
+  - Reduced complexity from O(n×p) to O(p) regex compilations
+- **Pipeline Maintainability: DRY Violation** - Extract shared constant
+  - Added `TIER_ORDER` constant for tier comparison functions
+  - Eliminated duplicate array definitions in `checkEscalationRule` and `escalateTier`
+
+### Added
+- **Pipeline State Persistence** - Infrastructure for state recovery across restarts
+  - Added `pipelineState` field to `Session` interface
+  - Added `syncPipelineToSession()` function for state export
+  - Added `restorePipelineFromSession()` function for state import
+
+---
+
 ## [1.1.3] - 2026-01-17
 
 ### Added
@@ -145,6 +167,7 @@ Or use the `/verify` or `/complete` prompts which guide this workflow automatica
 - Full API documentation for all tools
 - Installation guides (npm, npx, source)
 
+[1.1.4]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.1.4
 [1.1.3]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.1.3
 [1.1.2]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.1.2
 [1.1.1]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.1.1
