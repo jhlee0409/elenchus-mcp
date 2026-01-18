@@ -44,6 +44,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `updateCategoryMentionCache()`: O(1) category coverage check
   - Support for `stableRoundsRequired=0` for true single-round verification
 
+- **LLM-Based Evaluation** - Intelligent quality assessment using LLM reasoning
+  - `elenchus_evaluate_convergence`: Get LLM prompt for convergence quality assessment
+  - `elenchus_evaluate_severity`: Get LLM prompt for contextual severity classification
+  - `elenchus_evaluate_edge_cases`: Get LLM prompt to verify actual edge case analysis
+  - `elenchus_submit_llm_evaluation`: Submit LLM response and store results
+  - `llmEvalConfig` option in `elenchus_start_session` to enable LLM evaluation
+  - Replaces rigid pattern matching with context-aware LLM reasoning
+  - Fallback to pattern-based evaluation when LLM unavailable
+
 ### Changed
 - **Role Prompt Selection** - Now considers language preference
   - `getRolePrompt()` accepts `language` option
