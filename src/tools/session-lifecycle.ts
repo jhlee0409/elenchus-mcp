@@ -52,7 +52,9 @@ import {
   getRoleDefinition,
   deleteRoleState,
   getRoleState,
-  shouldUseConciseModeForSession
+  shouldUseConciseModeForSession,
+  type SupportedLanguage,
+  LANGUAGE_METADATA
 } from '../roles/index.js';
 import { RoleComplianceResult, RoleComplianceResultWithGuidance, VerifierRole } from '../roles/types.js';
 import {
@@ -271,6 +273,7 @@ export async function startSession(
   chunking?: object;
   pipeline?: object;
   safeguards?: object;
+  userPreferences?: object;
 }> {
   const session = await createSession(args.target, args.requirements, args.maxRounds);
 
@@ -379,7 +382,9 @@ export async function startSession(
 
   // Initialize Role Enforcement
   const roleState = initializeRoleEnforcement(session.id);
-  const verifierPrompt = getRolePrompt('verifier');
+  // [ENH: I18N] Get role prompt in detected language
+  const userLang = updatedSession?.userPreferences?.language;
+  const verifierPrompt = getRolePrompt('verifier', { language: userLang });
 
   // [ENH: TIERED] Initialize pipeline if enabled
   let pipelineState = null;
@@ -425,6 +430,17 @@ export async function startSession(
       filesCollected: updatedSession?.context.files.size || 0,
       requirements: args.requirements
     },
+    // [ENH: I18N] Include detected user preferences
+    userPreferences: updatedSession?.userPreferences ? {
+      language: updatedSession.userPreferences.language,
+      languageName: LANGUAGE_METADATA[updatedSession.userPreferences.language as keyof typeof LANGUAGE_METADATA]?.nativeName || 'English',
+      autonomyLevel: updatedSession.userPreferences.autonomyLevel,
+      autonomyDescription: updatedSession.userPreferences.autonomyLevel === 4 ? 'Delegate (full autonomy)'
+        : updatedSession.userPreferences.autonomyLevel === 3 ? 'Proceed (autonomous execution)'
+        : updatedSession.userPreferences.autonomyLevel === 2 ? 'Suggest (propose and wait)'
+        : 'Confirm (ask each step)',
+      verbosity: updatedSession.userPreferences.verbosity
+    } : undefined,
     mediator: {
       initialized: true,
       graphNodes: mediatorState.graph.nodes.size,
