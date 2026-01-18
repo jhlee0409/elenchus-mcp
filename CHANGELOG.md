@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.2.0] - 2026-01-19
 
 ### Added
+- **Multi-Language Dependency Analysis (tree-sitter)** - 15 language support
+  - Web: TypeScript, TSX, JavaScript, CSS
+  - Systems: Rust, Go, C, C++
+  - Enterprise: Java, C#
+  - Scripting: Python, Ruby, PHP, Bash, PowerShell
+  - Uses tree-sitter WASM for proper AST-based parsing
+  - Language-specific import/export/function/class extraction
+  - Graceful fallback if tree-sitter unavailable
+
 - **Multi-Language Prompt Templates** - Support for 8 languages
   - English (en), Korean (한국어), Japanese (日本語)
   - Chinese Simplified (简体中文), Chinese Traditional (繁體中文)
