@@ -1,6 +1,6 @@
 {
   "name": "@jhlee0409/elenchus-mcp",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "MCP server for Elenchus adversarial verification system - state management, context sharing, and orchestration for code verification loops",
   "type": "module",
   "main": "dist/index.js",
