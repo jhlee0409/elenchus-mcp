@@ -11,8 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Schema Error Messages** - Enhanced error messages for all enum fields
   - All Zod enum validations now use `enumErrorMap()` helper
   - Clear guidance on valid values: `Invalid role "Verifier". Must be exactly one of: "verifier", "critic" (case-sensitive).`
+  - Handles missing/undefined values: `Missing required field "severity". Must be one of: "CRITICAL", "HIGH", "MEDIUM", "LOW".`
   - Reduces LLM confusion when calling tools with enum parameters
   - Applied to: role, verdict, status, tier, severity, category, and other enum fields
+
+- **Issue Category Auto-Inference** - Category can be inferred from issue ID prefix
+  - `SEC-01` → `SECURITY`, `COR-02` → `CORRECTNESS`, etc.
+  - Category field is now optional if ID follows convention
+
+### Changed
+- **Centralized `enumErrorMap`** - Eliminated code duplication
+  - Moved to `src/utils/zod-helpers.ts` (single source of truth)
+  - Removed duplicate definitions from `config/schemas.ts`, `schemas/issue.ts`, `tools/schemas.ts`
+  - Consistent SCHEMA-07 fix (undefined handling) across all files
 
 ---
 
