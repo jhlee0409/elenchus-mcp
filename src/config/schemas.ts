@@ -2,17 +2,42 @@
  * Centralized Configuration Schemas
  * Single source of truth for all optimization/feature config Zod schemas
  * [REFACTOR: ZOD-UNIFY] Phase 3: Config schema centralization
+ * [FIX: SCHEMA-06] Enhanced error messages for all enum fields
  */
 
 import { z } from 'zod';
 
 // =============================================================================
+// Helper: Create enum with descriptive error messages
+// =============================================================================
+
+/**
+ * Creates a custom error map for enum validation
+ * [FIX: SCHEMA-06] Reduces LLM confusion by clearly stating valid values
+ */
+function enumErrorMap(fieldName: string, validValues: readonly string[]): z.ZodErrorMap {
+  return (issue, ctx) => {
+    if (issue.code === 'invalid_enum_value') {
+      const validOptions = validValues.join('", "');
+      return {
+        message: `Invalid ${fieldName} "${ctx.data}". Must be exactly one of: "${validOptions}" (case-sensitive).`
+      };
+    }
+    return { message: ctx.defaultError };
+  };
+}
+
+// =============================================================================
 // Verification Mode Schema
 // =============================================================================
 
+// [FIX: SCHEMA-06] Verification mode enum with helpful error message
+const VerificationModeValues = ['standard', 'fast-track', 'single-pass'] as const;
+const VerificationModeEnum = z.enum(VerificationModeValues, { errorMap: enumErrorMap('mode', VerificationModeValues) });
+
 export const VerificationModeSchema = z.object({
-  mode: z.enum(['standard', 'fast-track', 'single-pass']).default('standard').describe(
-    'Verification mode: standard (full Verifier↔Critic loop), fast-track (early convergence for clean code), single-pass (Verifier only)'
+  mode: VerificationModeEnum.default('standard').describe(
+    'Verification mode: "standard" (full Verifier↔Critic loop), "fast-track" (early convergence for clean code), "single-pass" (Verifier only)'
   ),
   allowEarlyConvergence: z.boolean().optional().describe('Allow convergence before minimum rounds'),
   skipCriticForCleanCode: z.boolean().optional().describe('Skip Critic review if no issues found'),
@@ -41,10 +66,14 @@ export type DifferentialConfigInput = z.infer<typeof DifferentialConfigSchema>;
 // Cache Schema
 // =============================================================================
 
+// [FIX: SCHEMA-06] Cache confidence enum with helpful error message
+const CacheConfidenceValues = ['HIGH', 'MEDIUM', 'LOW'] as const;
+const CacheConfidenceEnum = z.enum(CacheConfidenceValues, { errorMap: enumErrorMap('minConfidence', CacheConfidenceValues) });
+
 export const CacheConfigSchema = z.object({
   enabled: z.boolean().default(false).describe('Enable response caching for repeated verifications'),
   ttlSeconds: z.number().optional().default(86400).describe('Time-to-live for cache entries in seconds (default: 24 hours)'),
-  minConfidence: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional().default('MEDIUM').describe('Minimum confidence level to use cached results'),
+  minConfidence: CacheConfidenceEnum.optional().default('MEDIUM').describe('Minimum confidence level to use cached results: "HIGH", "MEDIUM", or "LOW"'),
   cacheIssues: z.boolean().optional().default(true).describe('Cache results that contain issues'),
   cacheCleanResults: z.boolean().optional().default(true).describe('Cache results with no issues'),
   // Extended fields from cache/types.ts
@@ -73,7 +102,9 @@ export type ChunkingConfigInput = z.infer<typeof ChunkingConfigSchema>;
 // Pipeline Schema
 // =============================================================================
 
-export const VerificationTierSchema = z.enum(['screen', 'focused', 'exhaustive']);
+// [FIX: SCHEMA-06] Verification tier enum with helpful error message
+const VerificationTierValues = ['screen', 'focused', 'exhaustive'] as const;
+export const VerificationTierSchema = z.enum(VerificationTierValues, { errorMap: enumErrorMap('tier', VerificationTierValues) });
 export type VerificationTierInput = z.infer<typeof VerificationTierSchema>;
 
 export const PipelineConfigSchema = z.object({
@@ -89,12 +120,9 @@ export type PipelineConfigInput = z.infer<typeof PipelineConfigSchema>;
 // Safeguards Schema
 // =============================================================================
 
-export const SamplingStrategySchema = z.enum([
-  'UNIFORM',
-  'RISK_WEIGHTED',
-  'CHANGE_WEIGHTED',
-  'DEPENDENCY_WEIGHTED'
-]);
+// [FIX: SCHEMA-06] Sampling strategy enum with helpful error message
+const SamplingStrategyValues = ['UNIFORM', 'RISK_WEIGHTED', 'CHANGE_WEIGHTED', 'DEPENDENCY_WEIGHTED'] as const;
+export const SamplingStrategySchema = z.enum(SamplingStrategyValues, { errorMap: enumErrorMap('strategy', SamplingStrategyValues) });
 export type SamplingStrategy = z.infer<typeof SamplingStrategySchema>;
 
 export const PeriodicConfigSchema = z.object({
