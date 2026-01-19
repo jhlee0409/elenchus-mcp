@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-01-19
+
+### Changed
+- **Centralized `enumErrorMap`** - Eliminated code duplication
+  - Moved to `src/utils/zod-helpers.ts` (single source of truth)
+  - Removed duplicate definitions from `config/schemas.ts`, `schemas/issue.ts`, `tools/schemas.ts`
+  - Consistent SCHEMA-07 fix (undefined handling) across all files
+
+### Fixed
+- **Issue Category Auto-Inference** - Category can be inferred from issue ID prefix
+  - `SEC-01` → `SECURITY`, `COR-02` → `CORRECTNESS`, etc.
+  - Category field is now optional if ID follows convention
+
+---
+
 ## [1.2.1] - 2026-01-19
 
 ### Fixed
@@ -14,16 +29,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Handles missing/undefined values: `Missing required field "severity". Must be one of: "CRITICAL", "HIGH", "MEDIUM", "LOW".`
   - Reduces LLM confusion when calling tools with enum parameters
   - Applied to: role, verdict, status, tier, severity, category, and other enum fields
-
-- **Issue Category Auto-Inference** - Category can be inferred from issue ID prefix
-  - `SEC-01` → `SECURITY`, `COR-02` → `CORRECTNESS`, etc.
-  - Category field is now optional if ID follows convention
-
-### Changed
-- **Centralized `enumErrorMap`** - Eliminated code duplication
-  - Moved to `src/utils/zod-helpers.ts` (single source of truth)
-  - Removed duplicate definitions from `config/schemas.ts`, `schemas/issue.ts`, `tools/schemas.ts`
-  - Consistent SCHEMA-07 fix (undefined handling) across all files
 
 ---
 

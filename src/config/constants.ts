@@ -13,7 +13,7 @@ export const APP_CONSTANTS = {
   /** Application name */
   NAME: 'elenchus-mcp',
   /** Current version - UPDATE THIS ON RELEASE */
-  VERSION: '1.2.1',
+  VERSION: '1.2.2',
   /** Graceful shutdown timeout in milliseconds */
   SHUTDOWN_TIMEOUT_MS: 100,
 } as const;
