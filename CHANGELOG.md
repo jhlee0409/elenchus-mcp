@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-01-19
+
+### Fixed
+- **Schema Error Messages** - Enhanced error messages for all enum fields
+  - All Zod enum validations now use `enumErrorMap()` helper
+  - Clear guidance on valid values: `Invalid role "Verifier". Must be exactly one of: "verifier", "critic" (case-sensitive).`
+  - Reduces LLM confusion when calling tools with enum parameters
+  - Applied to: role, verdict, status, tier, severity, category, and other enum fields
+
+---
+
 ## [1.2.0] - 2026-01-19
 
 ### Added
@@ -244,6 +255,7 @@ Or use the `/verify` or `/complete` prompts which guide this workflow automatica
 - Full API documentation for all tools
 - Installation guides (npm, npx, source)
 
+[1.2.1]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.2.1
 [1.2.0]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.2.0
 [1.1.4]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.1.4
 [1.1.3]: https://github.com/jhlee0409/elenchus-mcp/releases/tag/v1.1.3
