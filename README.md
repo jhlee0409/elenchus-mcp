@@ -327,147 +327,25 @@ Query issues with optional filtering.
 
 **Returns:** Array of issues matching the filter.
 
-### LLM Evaluation
+### Additional Tools (31 more)
 
-#### `elenchus_evaluate_convergence`
+Beyond the core tools above, Elenchus provides 31 additional tools for advanced workflows:
 
-Get LLM evaluation prompt for convergence quality assessment.
+| Category | Tools |
+|----------|-------|
+| LLM Evaluation | `elenchus_evaluate_convergence`, `elenchus_evaluate_severity`, `elenchus_evaluate_edge_cases`, `elenchus_submit_llm_evaluation` |
+| State Management | `elenchus_checkpoint`, `elenchus_rollback`, `elenchus_apply_fix` |
+| Analysis | `elenchus_ripple_effect`, `elenchus_mediator_summary` |
+| Role Enforcement | `elenchus_get_role_prompt`, `elenchus_role_summary`, `elenchus_update_role_config` |
+| Re-verification | `elenchus_start_reverification` |
+| Differential | `elenchus_save_baseline`, `elenchus_get_diff_summary`, `elenchus_get_project_history` |
+| Cache | `elenchus_get_cache_stats`, `elenchus_clear_cache` |
+| Pipeline | `elenchus_get_pipeline_status`, `elenchus_escalate_tier`, `elenchus_complete_tier` |
+| Safeguards | `elenchus_get_safeguards_status`, `elenchus_update_confidence`, `elenchus_record_sampling_result`, `elenchus_check_convergence_allowed` |
+| Optimization | `elenchus_set_compression_mode`, `elenchus_get_optimization_stats`, `elenchus_configure_optimization`, `elenchus_estimate_savings` |
+| Dynamic Roles | `elenchus_generate_roles`, `elenchus_set_dynamic_roles` |
 
-**Inputs:**
-- `sessionId` (string, required): Session ID to evaluate
-
-**Returns:** System prompt and user prompt to send to an LLM for quality assessment.
-
-#### `elenchus_evaluate_severity`
-
-Get LLM evaluation prompt for issue severity assessment.
-
-**Inputs:**
-- `sessionId` (string, required): Session ID
-- `issueId` (string, required): Issue ID to evaluate
-- `codeContext` (string, optional): Additional code context
-
-**Returns:** Prompt for LLM to assess if severity is accurate.
-
-#### `elenchus_evaluate_edge_cases`
-
-Get LLM evaluation prompt for edge case coverage.
-
-**Inputs:**
-- `sessionId` (string, required): Session ID to evaluate
-
-**Returns:** Prompt for LLM to assess edge case analysis quality.
-
-#### `elenchus_submit_llm_evaluation`
-
-Submit LLM evaluation response to store results.
-
-**Inputs:**
-- `sessionId` (string, required): Session ID
-- `evaluationType` (`"convergence"` | `"severity"` | `"edgeCases"` | `"falsePositive"`): Type of evaluation
-- `llmResponse` (string, required): LLM response to the evaluation prompt
-- `targetId` (string, optional): Target ID for severity/falsePositive evaluations
-
-**Returns:** Parsed evaluation result and storage confirmation.
-
-### State Management
-
-#### `elenchus_checkpoint`
-
-Create a checkpoint for potential rollback.
-
-**Inputs:**
-- `sessionId` (string, required): The session ID
-
-**Returns:** Success status and round number.
-
-#### `elenchus_rollback`
-
-Rollback to a previous checkpoint.
-
-**Inputs:**
-- `sessionId` (string, required): The session ID
-- `toRound` (number, required): Round number to rollback to
-
-**Returns:** Success status and restored round number.
-
-### Analysis Tools
-
-#### `elenchus_ripple_effect`
-
-Analyze impact of changing a file.
-
-**Inputs:**
-- `sessionId` (string, required): The session ID
-- `changedFile` (string, required): File that will be changed
-- `changedFunction` (string, optional): Specific function within the file
-
-**Returns:** Affected files, dependency paths, cascade depth, and recommendations.
-
-**Example:**
-```typescript
-elenchus_ripple_effect({
-  sessionId: "...",
-  changedFile: "src/auth/login.ts",
-  changedFunction: "validateToken"
-})
-// Returns: { affectedFiles: [...], cascadeDepth: 2, totalAffected: 8 }
-```
-
-#### `elenchus_mediator_summary`
-
-Get mediator analysis summary.
-
-**Inputs:**
-- `sessionId` (string, required): The session ID
-
-**Returns:** Dependency graph stats, coverage metrics, intervention history.
-
-### Role Enforcement
-
-#### `elenchus_get_role_prompt`
-
-Get role-specific guidelines.
-
-**Inputs:**
-- `role` (`"verifier"` | `"critic"`, required): Role to get prompt for
-
-**Returns:** System prompt, output template, checklist, mustDo/mustNotDo rules, focus areas.
-
-#### `elenchus_role_summary`
-
-Get role compliance summary for a session.
-
-**Inputs:**
-- `sessionId` (string, required): The session ID
-
-**Returns:** Compliance history, average scores, violations, current expected role.
-
-#### `elenchus_update_role_config`
-
-Update role enforcement settings.
-
-**Inputs:**
-- `sessionId` (string, required): The session ID
-- `strictMode` (boolean, optional): Reject non-compliant rounds
-- `minComplianceScore` (number, optional): Minimum score (0-100)
-- `requireAlternation` (boolean, optional): Require role alternation
-
-**Returns:** Updated configuration.
-
-### Re-verification
-
-#### `elenchus_start_reverification`
-
-Start re-verification of resolved issues from a previous session.
-
-**Inputs:**
-- `previousSessionId` (string, required): Original session ID
-- `workingDir` (string, required): Working directory
-- `targetIssueIds` (string[], optional): Specific issues to re-verify
-- `maxRounds` (number, optional): Maximum rounds (default: 6)
-
-**Returns:** New session ID with focused context on target issues.
+> All tools are auto-discovered by MCP clients. Use MCP Inspector (`npm run inspector`) for detailed schemas.
 
 ---
 
@@ -650,7 +528,7 @@ Start with quick analysis, escalate if needed:
 {
   pipelineConfig: {
     enabled: true,
-    startTier: "quick"  // quick → standard → deep
+    startTier: "screen"  // screen → focused → exhaustive
   }
 }
 ```
@@ -752,7 +630,7 @@ rm -rf ~/.elenchus/sessions/2026-01-17_*
 | **Mediator System** | Multi-language dependency graphs (tree-sitter), issue detection, interventions |
 | **Role Enforcement** | Ensure Verifier↔Critic alternation, validate compliance |
 | **Issue Lifecycle** | Track issue states from RAISED to RESOLVED |
-| **Pipeline** | Tiered verification (quick → standard → deep) |
+| **Pipeline** | Tiered verification (screen → focused → exhaustive) |
 
 ---
 

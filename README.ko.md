@@ -78,6 +78,12 @@ Elenchus는 적대적 코드 검증을 구현하는 **Model Context Protocol (MC
 - 엣지 케이스 문서화 요구
 - 클린 코드에 대한 부정 단언
 
+### 🧠 LLM 기반 평가 (선택)
+- **수렴 평가**: LLM이 검증 품질 판단 (엄격한 불리언 체크 대신)
+- **심각도 분류**: 컨텍스트 인식 영향 분석
+- **엣지 케이스 검증**: 실제 분석 여부 확인 (키워드 존재가 아닌)
+- **오탐 감지**: 증거 기반 이슈 검증
+
 ### 🔍 자동 영향 분석
 - **다중 언어 의존성 그래프** (tree-sitter 기반 15개 언어)
 - 파급 효과 예측
@@ -247,6 +253,12 @@ AI 어시스턴트가 자동으로 Elenchus 도구를 사용합니다.
 - `cacheConfig` (object, 선택): 이전 검증 캐싱
 - `chunkingConfig` (object, 선택): 큰 파일 청킹
 - `pipelineConfig` (object, 선택): 계층화된 검증
+- `llmEvalConfig` (object, 선택): LLM 기반 평가 설정
+  - `enabled`: boolean - LLM 평가 활성화
+  - `convergenceEval`: boolean - 수렴 품질에 LLM 사용
+  - `severityEval`: boolean - 심각도 분류에 LLM 사용
+  - `edgeCaseEval`: boolean - 엣지 케이스 검증에 LLM 사용
+  - `falsePositiveEval`: boolean - 오탐 감지에 LLM 사용
 
 **반환:** 세션 ID와 수집된 파일, 의존성 그래프 통계, 역할 설정을 포함한 초기 컨텍스트.
 
@@ -315,104 +327,25 @@ Verifier 또는 Critic 라운드 제출.
 
 **반환:** 필터에 맞는 이슈 배열.
 
-### 상태 관리
+### 추가 도구 (31개)
 
-#### `elenchus_checkpoint`
+위의 핵심 도구 외에 고급 워크플로우를 위한 31개 추가 도구 제공:
 
-롤백을 위한 체크포인트 생성.
+| 카테고리 | 도구 |
+|----------|------|
+| LLM 평가 | `elenchus_evaluate_convergence`, `elenchus_evaluate_severity`, `elenchus_evaluate_edge_cases`, `elenchus_submit_llm_evaluation` |
+| 상태 관리 | `elenchus_checkpoint`, `elenchus_rollback`, `elenchus_apply_fix` |
+| 분석 | `elenchus_ripple_effect`, `elenchus_mediator_summary` |
+| 역할 강제 | `elenchus_get_role_prompt`, `elenchus_role_summary`, `elenchus_update_role_config` |
+| 재검증 | `elenchus_start_reverification` |
+| 차분 분석 | `elenchus_save_baseline`, `elenchus_get_diff_summary`, `elenchus_get_project_history` |
+| 캐시 | `elenchus_get_cache_stats`, `elenchus_clear_cache` |
+| 파이프라인 | `elenchus_get_pipeline_status`, `elenchus_escalate_tier`, `elenchus_complete_tier` |
+| 세이프가드 | `elenchus_get_safeguards_status`, `elenchus_update_confidence`, `elenchus_record_sampling_result`, `elenchus_check_convergence_allowed` |
+| 최적화 | `elenchus_set_compression_mode`, `elenchus_get_optimization_stats`, `elenchus_configure_optimization`, `elenchus_estimate_savings` |
+| 동적 역할 | `elenchus_generate_roles`, `elenchus_set_dynamic_roles` |
 
-**입력:**
-- `sessionId` (string, 필수): 세션 ID
-
-**반환:** 성공 상태와 라운드 번호.
-
-#### `elenchus_rollback`
-
-이전 체크포인트로 롤백.
-
-**입력:**
-- `sessionId` (string, 필수): 세션 ID
-- `toRound` (number, 필수): 롤백할 라운드 번호
-
-**반환:** 성공 상태와 복원된 라운드 번호.
-
-### 분석 도구
-
-#### `elenchus_ripple_effect`
-
-파일 변경의 영향 분석.
-
-**입력:**
-- `sessionId` (string, 필수): 세션 ID
-- `changedFile` (string, 필수): 변경될 파일
-- `changedFunction` (string, 선택): 파일 내 특정 함수
-
-**반환:** 영향받는 파일, 의존성 경로, 케스케이드 깊이, 권장사항.
-
-**예시:**
-```typescript
-elenchus_ripple_effect({
-  sessionId: "...",
-  changedFile: "src/auth/login.ts",
-  changedFunction: "validateToken"
-})
-// 반환: { affectedFiles: [...], cascadeDepth: 2, totalAffected: 8 }
-```
-
-#### `elenchus_mediator_summary`
-
-중재자 분석 요약 조회.
-
-**입력:**
-- `sessionId` (string, 필수): 세션 ID
-
-**반환:** 의존성 그래프 통계, 커버리지 메트릭, 개입 이력.
-
-### 역할 강제
-
-#### `elenchus_get_role_prompt`
-
-역할별 가이드라인 조회.
-
-**입력:**
-- `role` (`"verifier"` | `"critic"`, 필수): 프롬프트를 조회할 역할
-
-**반환:** 시스템 프롬프트, 출력 템플릿, 체크리스트, mustDo/mustNotDo 규칙, 집중 영역.
-
-#### `elenchus_role_summary`
-
-세션의 역할 준수 요약 조회.
-
-**입력:**
-- `sessionId` (string, 필수): 세션 ID
-
-**반환:** 준수 이력, 평균 점수, 위반 사항, 현재 예상 역할.
-
-#### `elenchus_update_role_config`
-
-역할 강제 설정 업데이트.
-
-**입력:**
-- `sessionId` (string, 필수): 세션 ID
-- `strictMode` (boolean, 선택): 비준수 라운드 거부
-- `minComplianceScore` (number, 선택): 최소 점수 (0-100)
-- `requireAlternation` (boolean, 선택): 역할 교대 필수
-
-**반환:** 업데이트된 설정.
-
-### 재검증
-
-#### `elenchus_start_reverification`
-
-이전 세션의 해결된 이슈 재검증 시작.
-
-**입력:**
-- `previousSessionId` (string, 필수): 원본 세션 ID
-- `workingDir` (string, 필수): 작업 디렉토리
-- `targetIssueIds` (string[], 선택): 재검증할 특정 이슈
-- `maxRounds` (number, 선택): 최대 라운드 (기본: 6)
-
-**반환:** 대상 이슈에 집중된 컨텍스트와 새 세션 ID.
+> 모든 도구는 MCP 클라이언트에서 자동 검색됩니다. 상세 스키마는 MCP Inspector (`npm run inspector`)로 확인하세요.
 
 ---
 
@@ -595,7 +528,7 @@ RAISED → CHALLENGED → RESOLVED
 {
   pipelineConfig: {
     enabled: true,
-    startTier: "quick"  // quick → standard → deep
+    startTier: "screen"  // screen → focused → exhaustive
   }
 }
 ```
@@ -697,7 +630,7 @@ rm -rf ~/.elenchus/sessions/2026-01-17_*
 | **Mediator System** | 다중 언어 의존성 그래프 (tree-sitter), 이슈 감지, 개입 트리거 |
 | **Role Enforcement** | Verifier↔Critic 교대 보장, 준수 검증 |
 | **Issue Lifecycle** | RAISED에서 RESOLVED까지 이슈 상태 추적 |
-| **Pipeline** | 계층화된 검증 (quick → standard → deep) |
+| **Pipeline** | 계층화된 검증 (screen → focused → exhaustive) |
 
 ---
 
