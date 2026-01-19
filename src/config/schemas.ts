@@ -3,29 +3,11 @@
  * Single source of truth for all optimization/feature config Zod schemas
  * [REFACTOR: ZOD-UNIFY] Phase 3: Config schema centralization
  * [FIX: SCHEMA-06] Enhanced error messages for all enum fields
+ * [FIX: SCHEMA-07] Centralized enumErrorMap from utils
  */
 
 import { z } from 'zod';
-
-// =============================================================================
-// Helper: Create enum with descriptive error messages
-// =============================================================================
-
-/**
- * Creates a custom error map for enum validation
- * [FIX: SCHEMA-06] Reduces LLM confusion by clearly stating valid values
- */
-function enumErrorMap(fieldName: string, validValues: readonly string[]): z.ZodErrorMap {
-  return (issue, ctx) => {
-    if (issue.code === 'invalid_enum_value') {
-      const validOptions = validValues.join('", "');
-      return {
-        message: `Invalid ${fieldName} "${ctx.data}". Must be exactly one of: "${validOptions}" (case-sensitive).`
-      };
-    }
-    return { message: ctx.defaultError };
-  };
-}
+import { enumErrorMap } from '../utils/zod-helpers.js';
 
 // =============================================================================
 // Verification Mode Schema

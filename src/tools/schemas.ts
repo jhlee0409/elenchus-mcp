@@ -3,30 +3,12 @@
  * All Zod schemas for tool input validation
  * [REFACTOR: ZOD-UNIFY] Config schemas now imported from centralized location
  * [FIX: SCHEMA-06] Enhanced error messages for all enum fields
+ * [FIX: SCHEMA-07] Centralized enumErrorMap from utils
  */
 
 import { z } from 'zod';
 import { IssueInputSchema } from '../schemas/index.js';
-
-// =============================================================================
-// Helper: Create enum with descriptive error messages
-// =============================================================================
-
-/**
- * Creates a custom error map for enum validation
- * [FIX: SCHEMA-06] Reduces LLM confusion by clearly stating valid values
- */
-function enumErrorMap(fieldName: string, validValues: readonly string[]): z.ZodErrorMap {
-  return (issue, ctx) => {
-    if (issue.code === 'invalid_enum_value') {
-      const validOptions = validValues.join('", "');
-      return {
-        message: `Invalid ${fieldName} "${ctx.data}". Must be exactly one of: "${validOptions}" (case-sensitive).`
-      };
-    }
-    return { message: ctx.defaultError };
-  };
-}
+import { enumErrorMap } from '../utils/zod-helpers.js';
 
 // =============================================================================
 // Configuration Schemas (imported for local use and re-exported)

@@ -47,3 +47,7 @@ export {
   SafeParseError,
   type SafeParseResult
 } from './safe-parse.js';
+
+// Zod validation helpers
+// [FIX: SCHEMA-06, SCHEMA-07] Centralized enum error map
+export { enumErrorMap } from './zod-helpers.js';

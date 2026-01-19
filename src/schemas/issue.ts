@@ -3,29 +3,11 @@
  * Single source of truth for all Issue-related Zod schemas
  * [FIX: SCHEMA-03] Unified schema definitions to prevent mismatches
  * [FIX: SCHEMA-06] Enhanced error messages for all enum fields
+ * [FIX: SCHEMA-07] Centralized enumErrorMap from utils
  */
 
 import { z } from 'zod';
-
-// =============================================================================
-// Helper: Create enum with descriptive error messages
-// =============================================================================
-
-/**
- * Creates a custom error map for enum validation
- * [FIX: SCHEMA-06] Reduces LLM confusion by clearly stating valid values
- */
-function enumErrorMap(fieldName: string, validValues: readonly string[]): z.ZodErrorMap {
-  return (issue, ctx) => {
-    if (issue.code === 'invalid_enum_value') {
-      const validOptions = validValues.join('", "');
-      return {
-        message: `Invalid ${fieldName} "${ctx.data}". Must be exactly one of: "${validOptions}" (case-sensitive).`
-      };
-    }
-    return { message: ctx.defaultError };
-  };
-}
+import { enumErrorMap } from '../utils/zod-helpers.js';
 
 // =============================================================================
 // Base Enums (Single Source of Truth)
@@ -115,16 +97,33 @@ export type IssueTransition = z.infer<typeof IssueTransitionSchema>;
 // =============================================================================
 
 /**
+ * [FIX: SCHEMA-08] Infer category from issue ID prefix
+ * SEC-XX → SECURITY, COR-XX → CORRECTNESS, etc.
+ */
+function inferCategoryFromId(id: string): IssueCategory | undefined {
+  const prefixMap: Record<string, IssueCategory> = {
+    'SEC': 'SECURITY',
+    'COR': 'CORRECTNESS',
+    'REL': 'RELIABILITY',
+    'MNT': 'MAINTAINABILITY',
+    'PRF': 'PERFORMANCE'
+  };
+  const prefix = id?.split('-')[0]?.toUpperCase();
+  return prefixMap[prefix];
+}
+
+/**
  * Base schema for issue input validation
  * [FIX: SCHEMA-04] Added descriptive error messages for required fields
+ * [FIX: SCHEMA-08] Category is now optional - inferred from ID if missing
  */
 const IssueInputBaseSchema = z.object({
   id: z.string({
     required_error: 'Issue ID is required (e.g., "SEC-01", "COR-02")',
     invalid_type_error: 'Issue ID must be a string'
   }),
-  category: IssueCategoryEnum.describe(
-    'Must be one of: SECURITY, CORRECTNESS, RELIABILITY, MAINTAINABILITY, PERFORMANCE'
+  category: IssueCategoryEnum.optional().describe(
+    'Optional - will be inferred from ID prefix (SEC→SECURITY, COR→CORRECTNESS, etc.)'
   ),
   severity: SeverityEnum.describe(
     'Must be one of: CRITICAL, HIGH, MEDIUM, LOW'
@@ -151,25 +150,41 @@ const IssueInputBaseSchema = z.object({
  * Accepts both 'description' and 'why' fields for compatibility with
  * ConstrainedIssueSchema (LLM output format) and legacy formats
  * [FIX: SCHEMA-04] Enhanced with detailed error messages
+ * [FIX: SCHEMA-08] Auto-infers category from ID if missing
  */
-export const IssueInputSchema = IssueInputBaseSchema.superRefine((data, ctx) => {
-  // Provide helpful guidance for missing fields
-  const missingFields: string[] = [];
+export const IssueInputSchema = IssueInputBaseSchema
+  .transform((data) => {
+    // [FIX: SCHEMA-08] Auto-infer category from ID prefix if not provided
+    const category = data.category || inferCategoryFromId(data.id);
+    return { ...data, category };
+  })
+  .refine((data): data is typeof data & { category: IssueCategory } => {
+    // Ensure category is present (either provided or inferred)
+    return data.category !== undefined;
+  }, {
+    message: 'Category is required. Either provide category field or use ID prefix (SEC-01→SECURITY, COR-02→CORRECTNESS, REL→RELIABILITY, MNT→MAINTAINABILITY, PRF→PERFORMANCE)',
+    path: ['category']
+  })
+  .superRefine((data, ctx) => {
+    // Provide helpful guidance for other missing fields
+    const missingFields: string[] = [];
 
-  if (!data.id) missingFields.push('id (e.g., "SEC-01")');
-  if (!data.summary) missingFields.push('summary (brief issue description)');
-  if (!data.location) missingFields.push('location (e.g., "src/file.ts:42")');
-  if (!data.evidence) missingFields.push('evidence (code snippet or proof)');
+    if (!data.id) missingFields.push('id (e.g., "SEC-01")');
+    if (!data.summary) missingFields.push('summary (brief issue description)');
+    if (!data.location) missingFields.push('location (e.g., "src/file.ts:42")');
+    if (!data.evidence) missingFields.push('evidence (code snippet or proof)');
 
-  if (missingFields.length > 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `Issue object is incomplete. Missing required fields: ${missingFields.join(', ')}. Each issue in issuesRaised array must have: id, category, severity, summary, location, and evidence.`,
-      path: []
-    });
-  }
-});
-export type IssueInput = z.infer<typeof IssueInputBaseSchema>;
+    if (missingFields.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Issue object is incomplete. Missing: ${missingFields.join(', ')}`,
+        path: []
+      });
+    }
+  });
+
+// [FIX: SCHEMA-08] Proper type with category guaranteed after transform
+export type IssueInput = z.infer<typeof IssueInputBaseSchema> & { category: IssueCategory };
 
 // =============================================================================
 // Issue Storage Schema (internal storage with all fields)
