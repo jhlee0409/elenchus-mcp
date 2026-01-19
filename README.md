@@ -11,7 +11,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-≥18.0.0-green.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io/)
-
+[![MCP Badge](https://lobehub.com/badge/mcp/jhlee0409-elenchus-mcp)](https://lobehub.com/mcp/jhlee0409-elenchus-mcp)
 ---
 
 ## Table of Contents
