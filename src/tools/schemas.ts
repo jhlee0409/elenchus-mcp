@@ -2,10 +2,31 @@
  * Elenchus MCP Tool Schemas
  * All Zod schemas for tool input validation
  * [REFACTOR: ZOD-UNIFY] Config schemas now imported from centralized location
+ * [FIX: SCHEMA-06] Enhanced error messages for all enum fields
  */
 
 import { z } from 'zod';
 import { IssueInputSchema } from '../schemas/index.js';
+
+// =============================================================================
+// Helper: Create enum with descriptive error messages
+// =============================================================================
+
+/**
+ * Creates a custom error map for enum validation
+ * [FIX: SCHEMA-06] Reduces LLM confusion by clearly stating valid values
+ */
+function enumErrorMap(fieldName: string, validValues: readonly string[]): z.ZodErrorMap {
+  return (issue, ctx) => {
+    if (issue.code === 'invalid_enum_value') {
+      const validOptions = validValues.join('", "');
+      return {
+        message: `Invalid ${fieldName} "${ctx.data}". Must be exactly one of: "${validOptions}" (case-sensitive).`
+      };
+    }
+    return { message: ctx.defaultError };
+  };
+}
 
 // =============================================================================
 // Configuration Schemas (imported for local use and re-exported)
@@ -111,27 +132,48 @@ export const GetContextSchema = z.object({
   sessionId: z.string().describe('Session ID')
 });
 
+// [FIX: SCHEMA-06] Role enum with helpful error message
+const RoleEnumValues = ['verifier', 'critic'] as const;
+const RoleEnum = z.enum(RoleEnumValues, { errorMap: enumErrorMap('role', RoleEnumValues) });
+
 export const SubmitRoundSchema = z.object({
   sessionId: z.string().describe('Session ID'),
-  role: z.enum(['verifier', 'critic']).describe('Role of this round'),
+  role: RoleEnum.describe('Role of this round: must be "verifier" or "critic"'),
   output: z.string().describe('Complete output from the agent'),
   // [FIX: SCHEMA-03] Use centralized IssueInputSchema
   issuesRaised: z.array(IssueInputSchema).optional().describe('New issues raised in this round'),
   issuesResolved: z.array(z.string()).optional().describe('Issue IDs resolved in this round')
 });
 
+// [FIX: SCHEMA-05] Custom verdict enum with helpful error message (extra guidance for common mistake)
+const VerdictEnumValues = ['PASS', 'FAIL', 'CONDITIONAL'] as const;
+const VerdictEnum = z.enum(VerdictEnumValues, {
+  errorMap: (issue, ctx) => {
+    if (issue.code === 'invalid_enum_value') {
+      return {
+        message: `Invalid verdict "${ctx.data}". Must be exactly one of: "PASS", "FAIL", or "CONDITIONAL" (case-sensitive, no additional text). Do not include explanations in the verdict field.`
+      };
+    }
+    return { message: ctx.defaultError };
+  }
+});
+
 export const EndSessionSchema = z.object({
   sessionId: z.string().describe('Session ID'),
-  verdict: z.enum(['PASS', 'FAIL', 'CONDITIONAL']).describe('Final verdict')
+  verdict: VerdictEnum.describe('Final verdict: must be exactly "PASS", "FAIL", or "CONDITIONAL"')
 });
 
 // =============================================================================
 // Issue Management Schemas
 // =============================================================================
 
+// [FIX: SCHEMA-06] Status enum with helpful error message
+const IssueStatusFilterValues = ['all', 'unresolved', 'critical'] as const;
+const IssueStatusFilterEnum = z.enum(IssueStatusFilterValues, { errorMap: enumErrorMap('status', IssueStatusFilterValues) });
+
 export const GetIssuesSchema = z.object({
   sessionId: z.string().describe('Session ID'),
-  status: z.enum(['all', 'unresolved', 'critical']).optional().default('all')
+  status: IssueStatusFilterEnum.optional().default('all').describe('Filter issues: "all", "unresolved", or "critical"')
 });
 
 export const CheckpointSchema = z.object({
@@ -183,7 +225,7 @@ export const MediatorSummarySchema = z.object({
 // =============================================================================
 
 export const GetRolePromptSchema = z.object({
-  role: z.enum(['verifier', 'critic']).describe('Role to get prompt for')
+  role: RoleEnum.describe('Role to get prompt for: must be "verifier" or "critic"')
 });
 
 export const RoleSummarySchema = z.object({
@@ -238,9 +280,13 @@ export const GetPipelineStatusSchema = z.object({
   sessionId: z.string().describe('Session ID')
 });
 
+// [FIX: SCHEMA-06] Target tier enum with helpful error message
+const EscalateTierValues = ['focused', 'exhaustive'] as const;
+const EscalateTierEnum = z.enum(EscalateTierValues, { errorMap: enumErrorMap('targetTier', EscalateTierValues) });
+
 export const EscalateTierSchema = z.object({
   sessionId: z.string().describe('Session ID'),
-  targetTier: z.enum(['focused', 'exhaustive']).describe('Target tier to escalate to'),
+  targetTier: EscalateTierEnum.describe('Target tier to escalate to: "focused" or "exhaustive"'),
   reason: z.string().describe('Reason for escalation'),
   scope: z.array(z.string()).optional().describe('Files to focus on (if any)')
 });
@@ -265,11 +311,19 @@ export const GetSafeguardsStatusSchema = z.object({
   projectId: z.string().describe('Project ID (usually workingDir)')
 });
 
+// [FIX: SCHEMA-06] Confidence source enum with helpful error message
+const ConfidenceSourceValues = ['full', 'cache', 'chunk', 'tiered', 'sampled'] as const;
+const ConfidenceSourceEnum = z.enum(ConfidenceSourceValues, { errorMap: enumErrorMap('source', ConfidenceSourceValues) });
+
+// [FIX: SCHEMA-06] Severity enum with helpful error message
+const SeverityEnumValues = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const;
+const SeverityEnumLocal = z.enum(SeverityEnumValues, { errorMap: enumErrorMap('severity', SeverityEnumValues) });
+
 export const UpdateConfidenceSchema = z.object({
   sessionId: z.string().describe('Session ID'),
   fileConfidences: z.array(z.object({
     file: z.string(),
-    source: z.enum(['full', 'cache', 'chunk', 'tiered', 'sampled']),
+    source: ConfidenceSourceEnum.describe('Verification source: "full", "cache", "chunk", "tiered", or "sampled"'),
     score: z.number(),
     cacheAge: z.number().optional(),
     chunkCoverage: z.number().optional(),
@@ -281,7 +335,7 @@ export const RecordSamplingResultSchema = z.object({
   sessionId: z.string().describe('Session ID'),
   filePath: z.string().describe('Path of the sampled file'),
   issuesFound: z.number().describe('Number of issues found'),
-  severities: z.array(z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'])).describe('Severities of issues found')
+  severities: z.array(SeverityEnumLocal).describe('Severities of issues found: array of "CRITICAL", "HIGH", "MEDIUM", or "LOW"')
 });
 
 export const CheckConvergenceAllowedSchema = z.object({
