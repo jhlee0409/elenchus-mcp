@@ -16,7 +16,10 @@ import {
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
   ListPromptsRequestSchema,
-  GetPromptRequestSchema
+  GetPromptRequestSchema,
+  SubscribeRequestSchema,
+  UnsubscribeRequestSchema,
+  SetLevelRequestSchema
 } from '@modelcontextprotocol/sdk/types.js';
 
 import { tools } from './tools/index.js';
@@ -24,6 +27,19 @@ import { listSessions, getSession } from './state/session.js';
 import { generatePromptContent } from './prompts/index.js';
 import { APP_CONSTANTS } from './config/constants.js';
 import { initTreeSitter } from './mediator/languages/index.js';
+
+// MCP Protocol Extensions
+import {
+  initializeMCP,
+  mcpLogger,
+  mcpSubscriptions,
+  capabilityManager,
+  LOGGER_CATEGORIES,
+  type LogLevel
+} from './mcp/index.js';
+
+// zod-to-json-schema for proper JSON Schema generation
+import { zodToJsonSchema as zodToJsonSchemaLib } from 'zod-to-json-schema';
 
 // =============================================================================
 // Server Setup
@@ -37,8 +53,12 @@ const server = new Server(
   {
     capabilities: {
       tools: {},
-      resources: {},
-      prompts: {}
+      resources: {
+        subscribe: true,
+        listChanged: true
+      },
+      prompts: {},
+      logging: {}
     }
   }
 );
@@ -49,25 +69,22 @@ const server = new Server(
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
-    tools: Object.entries(tools).map(([name, tool]) => ({
-      name,
-      description: tool.description,
-      inputSchema: {
-        type: 'object' as const,
-        properties: Object.fromEntries(
-          Object.entries(tool.schema.shape).map(([key, value]) => [
-            key,
-            {
-              type: getZodType(value as ZodSchemaLike),
-              description: getZodDescription(value as ZodSchemaLike)
-            }
-          ])
-        ),
-        required: Object.keys(tool.schema.shape).filter(
-          key => !isZodOptional((tool.schema.shape as Record<string, ZodSchemaLike>)[key])
-        )
-      }
-    }))
+    tools: Object.entries(tools).map(([name, tool]) => {
+      // Use zod-to-json-schema for proper JSON Schema generation
+      const jsonSchema = zodToJsonSchemaLib(tool.schema, {
+        $refStrategy: 'none',
+        target: 'jsonSchema7'
+      });
+
+      // Remove $schema property as MCP doesn't expect it
+      const { $schema, ...inputSchema } = jsonSchema as Record<string, unknown>;
+
+      return {
+        name,
+        description: tool.description,
+        inputSchema
+      };
+    })
   };
 });
 
@@ -127,44 +144,163 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
       name: `Session: ${id}`,
       mimeType: 'application/json',
       description: `Elenchus verification session ${id}`
-    }))
+    })),
+    resourceTemplates: [
+      {
+        uriTemplate: 'elenchus://sessions/{sessionId}/issues',
+        name: 'Session Issues',
+        mimeType: 'application/json',
+        description: 'All issues in a verification session'
+      },
+      {
+        uriTemplate: 'elenchus://sessions/{sessionId}/issues/{issueId}',
+        name: 'Single Issue',
+        mimeType: 'application/json',
+        description: 'A specific issue by ID'
+      },
+      {
+        uriTemplate: 'elenchus://sessions/{sessionId}/rounds',
+        name: 'Session Rounds',
+        mimeType: 'application/json',
+        description: 'All rounds in a verification session'
+      },
+      {
+        uriTemplate: 'elenchus://sessions/{sessionId}/rounds/{roundNumber}',
+        name: 'Single Round',
+        mimeType: 'application/json',
+        description: 'A specific round by number'
+      },
+      {
+        uriTemplate: 'elenchus://sessions/{sessionId}/convergence',
+        name: 'Convergence Status',
+        mimeType: 'application/json',
+        description: 'Current convergence status for a session'
+      }
+    ]
   };
 });
 
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const { uri } = request.params;
 
-  // Parse URI
-  const match = uri.match(/^elenchus:\/\/sessions\/(.+)$/);
-  if (!match) {
-    throw new Error(`Invalid resource URI: ${uri}`);
-  }
-
-  const sessionId = match[1];
-  const session = await getSession(sessionId);
-
-  if (!session) {
-    throw new Error(`Session not found: ${sessionId}`);
-  }
-
-  // Convert Map to object for serialization
-  const serializable = {
-    ...session,
-    context: {
-      ...session.context,
-      files: Object.fromEntries(session.context.files)
-    }
-  };
-
-  return {
-    contents: [
-      {
-        uri,
-        mimeType: 'application/json',
-        text: JSON.stringify(serializable, null, 2)
+  // Resource URI pattern handlers
+  const patterns: Array<{
+    regex: RegExp;
+    handler: (matches: string[]) => Promise<unknown>;
+  }> = [
+    // Single issue: elenchus://sessions/{sessionId}/issues/{issueId}
+    {
+      regex: /^elenchus:\/\/sessions\/([^/]+)\/issues\/([^/]+)$/,
+      handler: async ([sessionId, issueId]) => {
+        const session = await getSession(sessionId);
+        if (!session) throw new Error(`Session not found: ${sessionId}`);
+        const issue = session.issues.find(i => i.id === issueId);
+        if (!issue) throw new Error(`Issue not found: ${issueId}`);
+        return issue;
       }
-    ]
-  };
+    },
+    // All issues: elenchus://sessions/{sessionId}/issues
+    {
+      regex: /^elenchus:\/\/sessions\/([^/]+)\/issues$/,
+      handler: async ([sessionId]) => {
+        const session = await getSession(sessionId);
+        if (!session) throw new Error(`Session not found: ${sessionId}`);
+        return {
+          sessionId,
+          totalCount: session.issues.length,
+          issues: session.issues
+        };
+      }
+    },
+    // Single round: elenchus://sessions/{sessionId}/rounds/{roundNumber}
+    {
+      regex: /^elenchus:\/\/sessions\/([^/]+)\/rounds\/(\d+)$/,
+      handler: async ([sessionId, roundStr]) => {
+        const session = await getSession(sessionId);
+        if (!session) throw new Error(`Session not found: ${sessionId}`);
+        const roundNumber = parseInt(roundStr, 10);
+        const round = session.rounds.find(r => r.number === roundNumber);
+        if (!round) throw new Error(`Round not found: ${roundNumber}`);
+        return round;
+      }
+    },
+    // All rounds: elenchus://sessions/{sessionId}/rounds
+    {
+      regex: /^elenchus:\/\/sessions\/([^/]+)\/rounds$/,
+      handler: async ([sessionId]) => {
+        const session = await getSession(sessionId);
+        if (!session) throw new Error(`Session not found: ${sessionId}`);
+        return {
+          sessionId,
+          totalCount: session.rounds.length,
+          currentRound: session.currentRound,
+          rounds: session.rounds
+        };
+      }
+    },
+    // Convergence: elenchus://sessions/{sessionId}/convergence
+    {
+      regex: /^elenchus:\/\/sessions\/([^/]+)\/convergence$/,
+      handler: async ([sessionId]) => {
+        const session = await getSession(sessionId);
+        if (!session) throw new Error(`Session not found: ${sessionId}`);
+        return {
+          sessionId,
+          status: session.status,
+          isConverged: session.status === 'converged',
+          currentRound: session.currentRound,
+          maxRounds: session.maxRounds,
+          issueStats: {
+            total: session.issues.length,
+            byStatus: session.issues.reduce((acc, issue) => {
+              acc[issue.status] = (acc[issue.status] || 0) + 1;
+              return acc;
+            }, {} as Record<string, number>),
+            bySeverity: session.issues.reduce((acc, issue) => {
+              acc[issue.severity] = (acc[issue.severity] || 0) + 1;
+              return acc;
+            }, {} as Record<string, number>)
+          },
+          llmEvalResults: session.llmEvalResults
+        };
+      }
+    },
+    // Full session: elenchus://sessions/{sessionId}
+    {
+      regex: /^elenchus:\/\/sessions\/([^/]+)$/,
+      handler: async ([sessionId]) => {
+        const session = await getSession(sessionId);
+        if (!session) throw new Error(`Session not found: ${sessionId}`);
+        // Convert Map to object for serialization
+        return {
+          ...session,
+          context: {
+            ...session.context,
+            files: Object.fromEntries(session.context.files)
+          }
+        };
+      }
+    }
+  ];
+
+  // Try each pattern
+  for (const { regex, handler } of patterns) {
+    const match = uri.match(regex);
+    if (match) {
+      const data = await handler(match.slice(1));
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify(data, null, 2)
+          }
+        ]
+      };
+    }
+  }
+
+  throw new Error(`Invalid resource URI: ${uri}`);
 });
 
 // =============================================================================
@@ -284,101 +420,33 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
 });
 
 // =============================================================================
-// Helpers - Zod Schema Introspection
+// Subscription Handlers
 // =============================================================================
 
-/**
- * Zod schema internal definition type (for introspection)
- * Note: This accesses Zod internals which may change between versions
- * [FIX: CORR-02] Extended to support nested objects and arrays
- */
-interface ZodSchemaDef {
-  typeName?: string;
-  description?: string;
-  innerType?: { _def?: ZodSchemaDef };
-  type?: { _def?: ZodSchemaDef };  // For ZodArray items
-  shape?: () => Record<string, ZodSchemaLike>;  // For ZodObject properties
-  values?: ZodSchemaLike[];  // For ZodEnum values
-}
+server.setRequestHandler(SubscribeRequestSchema, async (request) => {
+  const { uri } = request.params;
+  mcpSubscriptions.subscribe(uri);
+  await mcpLogger.debug(`Subscribed to resource: ${uri}`, undefined, LOGGER_CATEGORIES.SUBSCRIPTION);
+  return {};
+});
 
-interface ZodSchemaLike {
-  _def?: ZodSchemaDef;
-  isOptional?: () => boolean;
-  shape?: Record<string, ZodSchemaLike>;  // Direct shape access for objects
-}
+server.setRequestHandler(UnsubscribeRequestSchema, async (request) => {
+  const { uri } = request.params;
+  mcpSubscriptions.unsubscribe(uri);
+  await mcpLogger.debug(`Unsubscribed from resource: ${uri}`, undefined, LOGGER_CATEGORIES.SUBSCRIPTION);
+  return {};
+});
 
-/**
- * Convert Zod schema to JSON Schema representation
- * [FIX: CORR-02] Now properly handles nested objects, arrays with item types, and enums
- */
-function zodToJsonSchema(schema: ZodSchemaLike): Record<string, unknown> {
-  const typeName = schema._def?.typeName;
+// =============================================================================
+// Logging Handler
+// =============================================================================
 
-  switch (typeName) {
-    case 'ZodString':
-      return { type: 'string' };
-    case 'ZodNumber':
-      return { type: 'number' };
-    case 'ZodBoolean':
-      return { type: 'boolean' };
-    case 'ZodArray': {
-      const itemSchema = schema._def?.type;
-      return {
-        type: 'array',
-        items: itemSchema ? zodToJsonSchema(itemSchema) : {}
-      };
-    }
-    case 'ZodObject': {
-      const shape = schema.shape ?? (schema._def?.shape?.() as Record<string, ZodSchemaLike> | undefined);
-      if (shape) {
-        return {
-          type: 'object',
-          properties: Object.fromEntries(
-            Object.entries(shape).map(([key, value]) => [
-              key,
-              {
-                ...zodToJsonSchema(value),
-                description: getZodDescription(value)
-              }
-            ])
-          )
-        };
-      }
-      return { type: 'object' };
-    }
-    case 'ZodEnum':
-      return { type: 'string' };
-    case 'ZodOptional':
-    case 'ZodDefault':
-      return zodToJsonSchema(schema._def?.innerType ?? {});
-    default:
-      return { type: 'string' };
-  }
-}
-
-/**
- * Extract JSON Schema type from Zod schema (simplified for top-level)
- */
-function getZodType(schema: ZodSchemaLike): string {
-  const jsonSchema = zodToJsonSchema(schema);
-  return (jsonSchema.type as string) ?? 'string';
-}
-
-/**
- * Extract description from Zod schema
- */
-function getZodDescription(schema: ZodSchemaLike): string {
-  return schema._def?.description ?? '';
-}
-
-/**
- * Check if Zod schema field is optional
- */
-function isZodOptional(schema: ZodSchemaLike): boolean {
-  return schema._def?.typeName === 'ZodOptional' ||
-         schema._def?.typeName === 'ZodDefault' ||
-         (typeof schema.isOptional === 'function' && schema.isOptional());
-}
+server.setRequestHandler(SetLevelRequestSchema, async (request) => {
+  const { level } = request.params;
+  mcpLogger.setMinLevel(level as LogLevel);
+  await mcpLogger.info(`Log level set to: ${level}`, undefined, LOGGER_CATEGORIES.GENERAL);
+  return {};
+});
 
 // =============================================================================
 // Main
@@ -389,14 +457,17 @@ function isZodOptional(schema: ZodSchemaLike): boolean {
  * [FIX: REL-02] Properly cleanup before exit
  */
 async function gracefulShutdown(signal: string): Promise<void> {
-  console.error(`\n[Elenchus] Received ${signal}, shutting down gracefully...`);
+  await mcpLogger.info(`Received ${signal}, shutting down gracefully...`, undefined, LOGGER_CATEGORIES.GENERAL);
 
   try {
+    // Clear subscriptions
+    mcpSubscriptions.clear();
+
     // Close the server connection
     await server.close();
-    console.error('[Elenchus] Server closed successfully');
+    await mcpLogger.info('Server closed successfully', undefined, LOGGER_CATEGORIES.GENERAL);
   } catch (error) {
-    console.error('[Elenchus] Error during shutdown:', error);
+    await mcpLogger.error('Error during shutdown', { error }, LOGGER_CATEGORIES.GENERAL);
   }
 
   process.exit(0);
@@ -413,16 +484,30 @@ async function main() {
   try {
     await initTreeSitter();
   } catch (error) {
+    // Use console.error before MCP is initialized
     console.error('[Elenchus] Tree-sitter initialization failed, falling back to TypeScript-only:', error);
   }
 
+  // Connect server first
   await server.connect(transport);
 
-  console.error('Elenchus MCP Server running on stdio');
+  // Initialize MCP modules after connection
+  // Note: Client info is available after connection for capability detection
+  initializeMCP(server);
+
+  await mcpLogger.info('Elenchus MCP Server running on stdio', {
+    version: APP_CONSTANTS.VERSION,
+    capabilities: {
+      logging: true,
+      subscriptions: capabilityManager.supportsSubscriptions,
+      sampling: capabilityManager.supportsSampling,
+      progress: capabilityManager.supportsProgress
+    }
+  }, LOGGER_CATEGORIES.GENERAL);
 }
 
-main().catch((error) => {
-  console.error('Fatal error:', error);
+main().catch(async (error) => {
+  await mcpLogger.emergency('Fatal error', { error }, LOGGER_CATEGORIES.GENERAL);
   // [FIX: REL-02] Give a moment for error logging before exit
   setTimeout(() => process.exit(1), APP_CONSTANTS.SHUTDOWN_TIMEOUT_MS);
 });
