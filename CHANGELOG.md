@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-01-29
+
+### Added
+- **MCP Protocol Extensions** - Comprehensive MCP protocol support modules
+  - `src/mcp/cancellation.ts` - Request cancellation handling with abort controllers
+  - `src/mcp/capabilities.ts` - Server capability declarations and negotiation
+  - `src/mcp/logging.ts` - Structured logging system with log levels
+  - `src/mcp/progress.ts` - Progress tracking and reporting for long operations
+  - `src/mcp/sampling.ts` - LLM sampling support via MCP protocol
+  - `src/mcp/subscriptions.ts` - Resource subscription management
+  - `src/mcp/types.ts` - TypeScript type definitions for MCP extensions
+
+### Changed
+- **Server Architecture** - Integrated MCP extensions into main server
+  - Refactored `src/index.ts` for modular MCP extension loading
+  - Added zod-to-json-schema dependency for schema conversion
+
+---
+
 ## [1.2.2] - 2026-01-19
 
 ### Changed
